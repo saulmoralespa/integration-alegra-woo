@@ -40,7 +40,7 @@ function integration_alegra_wc_smp_notices($notice): void
 function integration_alegra_wc_smp_requirements(): bool
 {
 
-    if ( version_compare( '8.0', PHP_VERSION, '>' ) ) {
+    if ( !version_compare(PHP_VERSION, '8.0.0', '>=') ) {
         if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
             add_action(
                 'admin_notices',
