@@ -103,6 +103,7 @@ class Integration_Alegra_WC_Plugin
         add_action( 'manage_shop_order_posts_custom_column', array($this, 'content_column_alegra_print_invoice') );
         add_action( 'admin_enqueue_scripts', array($this, 'enqueue_scripts_admin') );
         add_action( 'wp_ajax_integration_alegra_print_invoice', array($this, 'ajax_integration_alegra_print_invoice'));
+        add_action( 'woocommerce_admin_order_data_after_billing_address', array($this, 'document_admin_order_data_after_billing_address'), 10, 1 );
     }
 
     public function add_integration($integrations)
@@ -114,6 +115,7 @@ class Integration_Alegra_WC_Plugin
     public function plugin_action_links($links)
     {
         $links[] = '<a href="' . admin_url('admin.php?page=wc-settings&tab=integration&section=wc_alegra_integration') . '">' . 'Configuraciones' . '</a>';
+        $links[] = '<a target="_blank" href="https://shop.saulmoralespa.com/integration-alegra-woocommerce/">' . 'Documentación' . '</a>';
         return $links;
     }
 
@@ -203,7 +205,7 @@ class Integration_Alegra_WC_Plugin
         );
 
         $fields['billing']['billing_dni'] = array(
-            'label' => __('Número de documento', 'subscription-epayco'),
+            'label' => __('Número de documento'),
             'placeholder' => _x('', 'placeholder'),
             'required' => true,
             'clear' => false,
@@ -242,6 +244,14 @@ class Integration_Alegra_WC_Plugin
         );
 
         return $fields;
+    }
+
+    public function document_admin_order_data_after_billing_address($order)
+    {
+        ?>
+        <p><strong><?= __('Tipo de documento:'); ?></strong><br/> <?= get_post_meta( $order->get_id(), '_billing_type_document', true ) ?></p>
+        <p><strong><?= __('Número de documento:'); ?></strong><br/> <?= get_post_meta( $order->get_id(), '_billing_dni', true ) ?></p>
+        <?php
     }
 
     public function content_column_alegra_print_invoice($column): void

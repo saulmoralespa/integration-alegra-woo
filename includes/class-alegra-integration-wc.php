@@ -39,7 +39,7 @@ class WC_Alegra_Integration extends WC_Integration
             !empty($this->token);
     }
 
-    public function validate_password_field($key, $value)
+    public function validate_password_field($key, $value) :string
     {
         if($this->get_option('user') !== '' && $key === 'token'){
             $status = Integration_Alegra_WC::test_auth($this->get_option('user'), $value);

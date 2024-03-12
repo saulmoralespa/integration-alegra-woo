@@ -37,7 +37,7 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
 
         foreach ( $ids as $post_id ) {
             $product = wc_get_product($post_id);
-            //if(!$product->get_sku() || $product->meta_exists('sync_alegra') ) continue;
+            if(!$product->get_sku() || $product->meta_exists('sync_alegra') ) continue;
 
             try{
                 $body = [
@@ -126,12 +126,14 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                 $client_id = $response['id'];
             }
 
-            foreach ($items as $values ) {
+            foreach ($items as $item ) {
 
-                $product_id = $values['product_id'];
-                $product = wc_get_product($product_id);
+                /**
+                 * @var WC_Product|bool $product
+                 */
+                $product  = $item->get_product();
 
-                if(!$product->get_sku()) continue;
+                if(!$product || !$product->get_sku()) continue;
 
                 $query = [
                     "reference" => $product->get_sku()
@@ -152,7 +154,6 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                         "inventory" => [
                             "unit" => $product->is_virtual() || $product->is_downloadable() ? 'service' : 'centimeter' //get_option( 'woocommerce_dimension_unit' )
                         ]
-
                     ];
 
                     $response = $self->alegra->createItem($body);
@@ -165,13 +166,13 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                     "id" => $item_id,
                     "name" => $product->get_name(),
                     "description" => substr($product->get_description(), 0,50),
-                    "price" => $product->get_price(),
-                    "quantity" => $values['quantity']
+                    "price" => wc_format_decimal( $order->get_line_total( $item ), 2 ),
+                    "quantity" => $item->get_quantity()
                 ];
 
             }
 
-            $invoice = [
+            $data_invoice = [
                 /*"numberTemplate" =>  [
                     "id" => $id,
                     "number" => $id
@@ -202,7 +203,7 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                     ]
                 ]*/
             ];
-            $data = $self->alegra->createInvoice($invoice);
+            $data = $self->alegra->createInvoice($data_invoice);
             $invoice_id = $data['id'];
             $order->add_order_note( sprintf( __( 'Factura de venta %s.' ), $invoice_id ) );
             $order->add_meta_data('invoice_id_alegra', $invoice_id);
