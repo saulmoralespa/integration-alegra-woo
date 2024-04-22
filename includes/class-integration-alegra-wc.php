@@ -2,21 +2,14 @@
 
 use Saulmoralespa\Alegra\Client;
 
-class Integration_Alegra_WC extends WC_Alegra_Integration
+class Integration_Alegra_WC
 {
 
     const MAX_INVOICES_TO_STAMP = 10;
 
-    public ?Client $alegra = null;
+    private static $alegra = null;
 
-    public function __construct()
-    {
-        parent::__construct();
-
-        if($this->user && $this->token){
-            $this->alegra = new Client($this->user, $this->token);
-        }
-    }
+    private static $integration_setting = null;
 
     public static function test_auth($user, $token): bool
     {
@@ -30,10 +23,41 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
         return true;
     }
 
+    public static function get_instance(): ?Client
+    {
+        if(isset(self::$integration_setting) && isset(self::$alegra)) return self::$alegra;
+
+        self::$integration_setting = (object)get_option('woocommerce_wc_alegra_integration_settings');
+
+        if(self::$integration_setting->user &&
+            self::$integration_setting->token){
+            self::$alegra = new Client(self::$integration_setting->user, self::$integration_setting->token);
+        }
+
+        return self::$alegra;
+    }
+
+    public static function get_sellers(): array
+    {
+        $sellers = [];
+
+        if (!self::get_instance()) return $sellers;
+
+        try{
+            $query = [
+                "status" => "active"
+            ];
+            $sellers = self::get_instance()->getSellers($query);
+        }catch(Exception $exception){
+            integration_alegra_wc_smp()->log($exception->getMessage());
+        }
+
+        return $sellers;
+    }
+
     public static function sync_products(array $ids): void
     {
-        $self = new self();
-        if (!$self->alegra) return;
+        if (!self::get_instance()) return;
 
         foreach ( $ids as $post_id ) {
             $product = wc_get_product($post_id);
@@ -58,13 +82,13 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                     "reference" => $product->get_sku()
                 ];
 
-                $response = $self->alegra->getItems($query);
+                $response = self::get_instance()->getItems($query);
                 $item_id = $response[0]['id'] ?? null;
 
                 if(isset($item_id)){
-                    $self->alegra->editItem($item_id, $body);
+                    self::get_instance()->editItem($item_id, $body);
                 }else {
-                    $self->alegra->createItem($body);
+                    self::get_instance()->createItem($body);
                 }
 
                 $product->add_meta_data('sync_alegra', true);
@@ -76,10 +100,9 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
         }
     }
 
-    public static function integration_alegra_generate_invoice($order_id, $previous_status, $next_status): void
+    public static function generate_invoice($order_id, $previous_status, $next_status): void
     {
-        $self = new self();
-        if (!$self->alegra || wc_get_order_status_name($next_status) !== wc_get_order_status_name($self->status_generate_invoice)) return;
+        if (!self::get_instance() || wc_get_order_status_name($next_status) !== wc_get_order_status_name(self::$integration_setting->status_generate_invoice)) return;
 
         $order = wc_get_order($order_id);
 
@@ -95,23 +118,42 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
 
             if(!$billing_dni) return;
 
+            $dv_nit = null;
+
+            if (str_contains($billing_dni, '-')){
+                [$billing_dni, $dv_nit] = explode('-', $billing_dni);
+            }
+
             $query = [
-               "identification" =>  $billing_dni
+               "identification" => $billing_dni
             ];
 
-            $response = $self->alegra->getContacts($query);
+            $response = self::get_instance()->getContacts($query);
             $client_id = $response[0]['id'] ?? null;
 
             if(empty($response)){
+                $country = $order->get_billing_country() ?: $order->get_shipping_country();
+                $state = $order->get_billing_state() ?: $order->get_shipping_state();
+                $countries = WC()->countries->get_countries();
+                $country_name = $countries[$country];
+
                 $data = [
                     "name" => $order->get_formatted_billing_full_name() ?: $order->get_formatted_shipping_full_name(),
                     "nameObject" => [
                         "firstName" => $order->get_billing_first_name() ?: $order->get_shipping_first_name(),
                         "lastName" => $order->get_billing_last_name() ?: $order->get_shipping_last_name()
                     ],
+                    "address" => [
+                        "city" => $order->get_billing_city() ?: $order->get_shipping_city(),
+                        "department" =>  self::name_department($country, $state),
+                        "address" =>  $order->get_shipping_address_1() ? $order->get_shipping_address_1() .
+                            " " . $order->get_shipping_address_2() : $order->get_billing_address_1() .
+                            " " . $order->get_billing_address_2(),
+                        "country" =>  $country_name,
+                    ],
                     "identificationObject" => [
                         "number" => $billing_dni,
-                        "type" => $billing_type_document,
+                        "type" => $billing_type_document
                     ],
                     "kindOfPerson" => $billing_type_document === 'NIT' ? 'LEGAL_ENTITY' : "PERSON_ENTITY",
                     "regime" =>  $billing_type_document === 'NIT' ? 'COMMON_REGIME' : "SIMPLIFIED_REGIME",
@@ -122,7 +164,11 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                     "status" => "active"
                 ];
 
-                $response = $self->alegra->createContact($data);
+                if($dv_nit){
+                    $data["identificationObject"]["dv"] = $dv_nit;
+                }
+
+                $response = self::get_instance()->createContact($data);
                 $client_id = $response['id'];
             }
 
@@ -139,7 +185,7 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                     "reference" => $product->get_sku()
                 ];
 
-                $response = $self->alegra->getItems($query);
+                $response = self::get_instance()->getItems($query);
                 $item_id = $response[0]['id'] ?? null;
 
                 if(empty($response)){
@@ -156,7 +202,7 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                         ]
                     ];
 
-                    $response = $self->alegra->createItem($body);
+                    $response = self::get_instance()->createItem($body);
                     $item_id = $response['id'];
                     $product->add_meta_data('sync_alegra', true);
                     $product->save_meta_data();
@@ -177,7 +223,10 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                     "id" => $id,
                     "number" => $id
                 ],*/
-                "status" => "open",
+                "stamp" => [
+                    "generateStamp" => false //  true emit invoice app
+                ],
+                "status" => self::$integration_setting->status_generate_invoice,
                 "dueDate" =>  wp_date('Y-m-d'),
                 "date" => wp_date('Y-m-d'),
                 "client" => [
@@ -203,7 +252,18 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
                     ]
                 ]*/
             ];
-            $data = $self->alegra->createInvoice($data_invoice);
+
+            $seller = [];
+
+            if(isset(self::$integration_setting->seller_generate_invoice) &&
+                self::$integration_setting->seller_generate_invoice){
+                $seller = [
+                    "seller" => self::$integration_setting->seller_generate_invoice
+                ];
+            }
+
+            $data_invoice = array_merge($data_invoice, $seller);
+            $data = self::get_instance()->createInvoice($data_invoice);
             $invoice_id = $data['id'];
             $order->add_order_note( sprintf( __( 'Factura de venta %s.' ), $invoice_id ) );
             $order->add_meta_data('invoice_id_alegra', $invoice_id);
@@ -215,7 +275,6 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
 
     public static function emit_invoices(array $post_ids): void
     {
-        $self = new self();
         $ids = [];
 
         $post_ids_max = array_slice($post_ids, 0, self::MAX_INVOICES_TO_STAMP);
@@ -233,7 +292,7 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
 
         try{
             $idsArr = [$ids_str];
-            $response = $self->alegra->stampInvoices($idsArr);
+            $response = self::get_instance()->stampInvoices($idsArr);
 
             foreach ($response['data'] as $invoice){
                 if ($invoice['success'] && isset($ids[$invoice['id']])){
@@ -247,13 +306,11 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
 
     public static function view_invoice(int $invoice_id) :string|null
     {
-        $self = new self();
-
         try{
             $params = [
                 "fields" => "pdf"
             ];
-            $response = $self->alegra->getInvoice($invoice_id, $params);
+            $response = self::get_instance()->getInvoice($invoice_id, $params);
             return $response['pdf'];
         }catch (Exception $exception){
             integration_alegra_wc_smp()->log($exception->getMessage());
@@ -261,4 +318,49 @@ class Integration_Alegra_WC extends WC_Alegra_Integration
         }
     }
 
+    public static function name_department($country, $state)
+    {
+        $countries_obj = new WC_Countries();
+        $country_states_array = $countries_obj->get_states();
+        $name_state_destination = '';
+
+        if(!isset($country_states_array[$country][$state]))
+            return $name_state_destination;
+
+        return $country_states_array[$country][$state];
+    }
+
+    public static function calculateDv($nit)
+    {
+        $vpri = array(16);
+        $z = strlen($nit);
+
+        $vpri[1]  =  3 ;
+        $vpri[2]  =  7 ;
+        $vpri[3]  = 13 ;
+        $vpri[4]  = 17 ;
+        $vpri[5]  = 19 ;
+        $vpri[6]  = 23 ;
+        $vpri[7]  = 29 ;
+        $vpri[8]  = 37 ;
+        $vpri[9]  = 41 ;
+        $vpri[10] = 43 ;
+        $vpri[11] = 47 ;
+        $vpri[12] = 53 ;
+        $vpri[13] = 59 ;
+        $vpri[14] = 67 ;
+        $vpri[15] = 71 ;
+
+        $x = 0 ;
+
+        for ($i = 0; $i < $z; $i++) {
+            $y = (int)substr($nit, $i, 1);
+            $x += ($y * $vpri[$z - $i]);
+        }
+
+        $y = $x % 11;
+
+        return ($y > 1) ? 11 - $y : $y;
+
+    }
 }

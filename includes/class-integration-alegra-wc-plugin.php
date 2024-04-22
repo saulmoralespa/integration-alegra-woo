@@ -81,7 +81,9 @@ class Integration_Alegra_WC_Plugin
             add_filter('woocommerce_integrations', array($this, 'add_integration'));
         }
 
-        require_once($this->includes_path . 'class-integration-alegra-wc.php');
+        if (!class_exists('Integration_Alegra_WC')) {
+            require_once($this->includes_path . 'class-integration-alegra-wc.php');
+        }
 
         $myUpdateChecker = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
             'https://github.com/saulmoralespa/integration-alegra-woo',
@@ -96,12 +98,15 @@ class Integration_Alegra_WC_Plugin
         add_filter( 'bulk_actions-edit-shop_order', array($this, 'emit_invoices_bulk_actions'), 20 );
         add_filter( 'handle_bulk_actions-edit-product', array($this, 'sync_bulk_action_edit_product'), 10, 3 );
         add_filter( 'handle_bulk_actions-edit-shop_order', array($this, 'emit_invoices_bulk_action_edit_shop_order'), 10, 3 );
-        add_filter( 'manage_edit-shop_order_columns', array($this, 'integration_alegra_print_invoice'), 20 );
-        add_filter( 'woocommerce_checkout_fields', array($this, 'document_woocommerce_billing_fields'));
+        add_filter( 'manage_edit-shop_order_columns', array($this, 'alegra_print_invoice'), 20 );
+        add_filter( 'woocommerce_checkout_fields', array($this, 'document_woocommerce_fields'));
+        add_action( 'woocommerce_checkout_process', array($this, 'very_nit_validation'));
+        add_action( 'woocommerce_checkout_update_order_meta', array($this, 'custom_checkout_fields_update_order_meta') );
 
-        add_action( 'woocommerce_order_status_changed', array( 'Integration_Alegra_WC', 'integration_alegra_generate_invoice' ), 10, 3 );
+        add_action( 'woocommerce_order_status_changed', array( 'Integration_Alegra_WC', 'generate_invoice' ), 10, 3 );
         add_action( 'manage_shop_order_posts_custom_column', array($this, 'content_column_alegra_print_invoice') );
         add_action( 'admin_enqueue_scripts', array($this, 'enqueue_scripts_admin') );
+        add_action( 'wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action( 'wp_ajax_integration_alegra_print_invoice', array($this, 'ajax_integration_alegra_print_invoice'));
         add_action( 'woocommerce_admin_order_data_after_billing_address', array($this, 'document_admin_order_data_after_billing_address'), 10, 1 );
     }
@@ -167,7 +172,7 @@ class Integration_Alegra_WC_Plugin
         return $redirect_to;
     }
 
-    public function integration_alegra_print_invoice($columns) : array
+    public function alegra_print_invoice($columns) : array
     {
         $settings = get_option('woocommerce_wc_alegra_integration_settings');
         if(isset($settings['user']) &&
@@ -182,7 +187,7 @@ class Integration_Alegra_WC_Plugin
         return $columns;
     }
 
-    public function document_woocommerce_billing_fields($fields): array
+    public function document_woocommerce_fields($fields): array
     {
         $fields['billing']['billing_type_document'] = array(
             'label'       => __('Tipo de documento'),
@@ -210,6 +215,9 @@ class Integration_Alegra_WC_Plugin
             'required' => true,
             'clear' => false,
             'type' => 'number',
+            'custom_attributes' => array(
+                'minlength' => 5
+            ),
             'class' => array('my-css')
         );
 
@@ -240,10 +248,45 @@ class Integration_Alegra_WC_Plugin
             'required' => true,
             'clear'    => false,
             'type' => 'number',
+            'custom_attributes' => array(
+                'minlength' => 5
+            ),
             'class' => array('my-css')
         );
 
         return $fields;
+    }
+
+    public function very_nit_validation()
+    {
+        $billing_type_document = sanitize_text_field($_POST['billing_type_document']);
+        $billing_dni = sanitize_text_field($_POST['billing_dni']);
+        $shipping_type_document = sanitize_text_field($_POST['shipping_type_document']);
+        $shipping_dni = sanitize_text_field($_POST['shipping_dni']);
+
+        if(($billing_type_document === 'NIT' && $billing_dni && strlen($billing_dni) !== 9) ||
+            ($shipping_type_document === 'NIT' && $shipping_dni && strlen($shipping_dni) !== 9)){
+            wc_add_notice( __( '<p>Ingrese un NIT válido sin el DV</p>' ), 'error' );
+        }
+    }
+
+    public function custom_checkout_fields_update_order_meta($order_id): void
+    {
+        $billing_type_document = sanitize_text_field($_POST['billing_type_document']);
+        $billing_dni = sanitize_text_field($_POST['billing_dni']);
+        $shipping_type_document = sanitize_text_field($_POST['shipping_type_document']);
+        $shipping_dni = sanitize_text_field($_POST['shipping_dni']);
+
+        if($billing_type_document === 'NIT' && $billing_dni){
+            $dv = Integration_Alegra_WC::calculateDv($billing_dni);
+            $nit = "$billing_dni-$dv";
+            update_post_meta( $order_id, '_billing_dni', $nit );
+        }
+        if($shipping_type_document === 'NIT' && $shipping_dni){
+            $dv = Integration_Alegra_WC::calculateDv($shipping_dni);
+            $nit = "$shipping_dni-$dv";
+            update_post_meta( $order_id, '_shipping_dni', $nit );
+        }
     }
 
     public function document_admin_order_data_after_billing_address($order)
@@ -272,8 +315,15 @@ class Integration_Alegra_WC_Plugin
     public function enqueue_scripts_admin($hook): void
     {
         if ($hook === 'edit.php'){
-            wp_enqueue_script( 'integration_alegra', $this->assets. 'js/integration-alegra.js', array( 'jquery' ), $this->version, true );
-            wp_enqueue_script( 'integration_alegra_sweet_alert', $this->assets. 'js/sweetalert2.min.js', array( 'jquery' ), $this->version, true );
+            wp_enqueue_script( 'integration-alegra', $this->assets. 'js/integration-alegra.js', array( 'jquery' ), $this->version, true );
+            wp_enqueue_script( 'integration-alegra-sweet-alert', $this->assets. 'js/sweetalert2.min.js', array( 'jquery' ), $this->version, true );
+        }
+    }
+
+    public function enqueue_scripts()
+    {
+        if ( is_checkout() ) {
+            wp_enqueue_script( 'integration-alegra-field-dni', $this->plugin_url . 'assets/js/field-dni-checkout.js', array( 'jquery' ), $this->version, true );
         }
     }
 
