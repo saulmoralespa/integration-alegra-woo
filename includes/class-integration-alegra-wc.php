@@ -102,7 +102,7 @@ class Integration_Alegra_WC
 
     public static function generate_invoice($order_id, $previous_status, $next_status): void
     {
-        if (!self::get_instance() || wc_get_order_status_name($next_status) !== wc_get_order_status_name(self::$integration_setting->status_generate_invoice)) return;
+        if (!self::get_instance() || wc_get_order_status_name($next_status) !== wc_get_order_status_name(self::$integration_setting->order_status_generate_invoice)) return;
 
         $order = wc_get_order($order_id);
 
