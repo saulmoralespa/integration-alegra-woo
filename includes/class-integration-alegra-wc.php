@@ -11,6 +11,8 @@ class Integration_Alegra_WC
 
     private static $integration_setting = null;
 
+    const SKU_SHIPPING = 'S-P-W';
+
     public static function test_auth($user, $token): bool
     {
         try{
@@ -53,6 +55,21 @@ class Integration_Alegra_WC
         }
 
         return $sellers;
+    }
+
+    public static function get_taxes(): array
+    {
+        $taxes = [];
+
+        if (!self::get_instance()) return $taxes;
+
+        try{
+            $taxes = self::get_instance()->getTaxes();
+        }catch(Exception $exception){
+            integration_alegra_wc_smp()->log($exception->getMessage());
+        }
+
+        return $taxes;
     }
 
     public static function sync_products(array $ids): void
@@ -216,6 +233,44 @@ class Integration_Alegra_WC
                     "quantity" => $item->get_quantity()
                 ];
 
+                if(self::$integration_setting->tax){
+                    $items_invoice[count($items_invoice) - 1]["tax"] = [
+                        "id" => self::$integration_setting->tax
+                    ];
+                }
+            }
+
+            if($order->get_shipping_total()){
+
+                $query = [
+                    "reference" => self::SKU_SHIPPING
+                ];
+
+                $response = self::get_instance()->getItems($query);
+                $item_id = $response[0]['id'] ?? null;
+
+                $body = [
+                    "price" => 20.000,
+                    "name" => "Envío",
+                    "type" => 'service',
+                    "reference" => self::SKU_SHIPPING,
+                    "description" => "Producto tipo servicio destinado para envío",
+                    "inventory" => [
+                        "unit" => 'service'
+                    ]
+                ];
+
+                if(is_null($item_id)){
+                    $response = self::get_instance()->createItem($body);
+                    $item_id = $response['id'];
+                }
+
+                $items_invoice[] = [
+                    "id" => $item_id,
+                    "name" => "Envío",
+                    "price" => wc_format_decimal($order->get_shipping_total(), 0),
+                    "quantity" => 1
+                ];
             }
 
             $data_invoice = [
@@ -330,7 +385,7 @@ class Integration_Alegra_WC
         return $country_states_array[$country][$state];
     }
 
-    public static function calculateDv($nit)
+    public static function calculateDv($nit): int
     {
         $vpri = array(16);
         $z = strlen($nit);

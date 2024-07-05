@@ -51,4 +51,10 @@ class WC_Alegra_Integration extends WC_Integration
 
         return $value;
     }
+
+    public function get_data_options(string $method, callable $callback)
+    {
+        $data = isset($_GET['section']) && $_GET['section'] === $this->id ? $method() : [];
+        return array_reduce($data, $callback, []);
+    }
 }

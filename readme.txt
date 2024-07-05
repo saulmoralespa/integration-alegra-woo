@@ -3,9 +3,9 @@ Contributors: saulmorales
 Donate link: https://saulmoralespa.com/donation
 Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, shop, invoice, configurable, alegra, account, system
 Requires at least: 6.0
-Tested up to: 6.5.2
+Tested up to: 6.5.5
 Requires PHP: 8.0
-Stable tag: 0.0.4
+Stable tag: 0.0.5
 License: GNU General Public License v3.0
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -57,6 +57,9 @@ Sí, puede emitir desde una o masivamente hasta 10 facturas
 * Updated create contact
 = 0.0.4 =
 * Fixed generate invoice
+= 0.0.5 =
+* Added option select tax
+* Added item shipping cost
 
 == Credits ==
 *  [Website](https://saulmoralespa.com) [Linkedin](https://www.linkedin.com/in/saulmoralespa/)

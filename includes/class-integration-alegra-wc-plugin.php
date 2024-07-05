@@ -101,7 +101,7 @@ class Integration_Alegra_WC_Plugin
         add_filter( 'manage_edit-shop_order_columns', array($this, 'alegra_print_invoice'), 20 );
         add_filter( 'woocommerce_checkout_fields', array($this, 'document_woocommerce_fields'));
         add_action( 'woocommerce_checkout_process', array($this, 'very_nit_validation'));
-        add_action( 'woocommerce_checkout_update_order_meta', array($this, 'custom_checkout_fields_update_order_meta') );
+        add_action( 'woocommerce_checkout_update_order_meta', array($this, 'custom_checkout_fields_update_order_meta'));
 
         add_action( 'woocommerce_order_status_changed', array( 'Integration_Alegra_WC', 'generate_invoice' ), 10, 3 );
         add_action( 'manage_shop_order_posts_custom_column', array($this, 'content_column_alegra_print_invoice') );
@@ -272,21 +272,21 @@ class Integration_Alegra_WC_Plugin
 
     public function custom_checkout_fields_update_order_meta($order_id): void
     {
+
         $billing_type_document = sanitize_text_field($_POST['billing_type_document']);
         $billing_dni = sanitize_text_field($_POST['billing_dni']);
         $shipping_type_document = sanitize_text_field($_POST['shipping_type_document']);
         $shipping_dni = sanitize_text_field($_POST['shipping_dni']);
+        $key_field_dni = $billing_dni ? '_billing_dni' :  '_shipping_dni';
+        $type_document = $billing_type_document ?: $shipping_type_document;
+        $dni = $billing_dni ?: $shipping_dni;
 
-        if($billing_type_document === 'NIT' && $billing_dni){
-            $dv = Integration_Alegra_WC::calculateDv($billing_dni);
-            $nit = "$billing_dni-$dv";
-            update_post_meta( $order_id, '_billing_dni', $nit );
+        if($type_document === 'NIT'){
+            $dv = Integration_Alegra_WC::calculateDv($dni);
+            $dni = "$dni-$dv";
         }
-        if($shipping_type_document === 'NIT' && $shipping_dni){
-            $dv = Integration_Alegra_WC::calculateDv($shipping_dni);
-            $nit = "$shipping_dni-$dv";
-            update_post_meta( $order_id, '_shipping_dni', $nit );
-        }
+
+        update_post_meta( $order_id, $key_field_dni, $dni );
     }
 
     public function document_admin_order_data_after_billing_address($order)
