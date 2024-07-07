@@ -60,6 +60,7 @@ Sí, puede emitir desde una o masivamente hasta 10 facturas
 = 0.0.5 =
 * Added option select tax
 * Added item shipping cost
+* Fixed tax in product
 
 == Credits ==
 *  [Website](https://saulmoralespa.com) [Linkedin](https://www.linkedin.com/in/saulmoralespa/)
