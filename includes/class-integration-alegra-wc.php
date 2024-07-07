@@ -92,7 +92,6 @@ class Integration_Alegra_WC
                     "inventory" => [
                         "unit" => $product->is_virtual() || $product->is_downloadable() ? 'service' : 'centimeter' //get_option( 'woocommerce_dimension_unit' )
                     ]
-
                 ];
 
                 $query = [
@@ -235,7 +234,9 @@ class Integration_Alegra_WC
 
                 if(self::$integration_setting->tax){
                     $items_invoice[count($items_invoice) - 1]["tax"] = [
-                        "id" => self::$integration_setting->tax
+                        [
+                            "id" => self::$integration_setting->tax
+                        ]
                     ];
                 }
             }
