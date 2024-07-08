@@ -229,6 +229,7 @@ class Integration_Alegra_WC
                     "name" => $product->get_name(),
                     "description" => substr($product->get_description(), 0,50),
                     "price" => wc_format_decimal( $order->get_line_total( $item ), 2 ),
+                    "discount" => round(($item->get_subtotal() - $item->get_total()) / $item->get_subtotal() * 100),
                     "quantity" => $item->get_quantity()
                 ];
 
