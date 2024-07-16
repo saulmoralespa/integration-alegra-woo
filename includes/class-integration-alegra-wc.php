@@ -340,16 +340,13 @@ class Integration_Alegra_WC
             $invoice_id_alegra = get_post_meta($post_id, 'invoice_id_alegra', true);
             $invoice_emit_alegra = get_post_meta($post_id, 'invoice_emit_alegra', true);
 
-            if ($invoice_id_alegra && !$invoice_emit_alegra) $ids[$invoice_id_alegra] = $post_id;
+            if ($invoice_id_alegra && !$invoice_emit_alegra) $ids[] = $invoice_id_alegra;
         }
 
         if (empty($ids)) return;
 
-        $ids_str = implode(',', array_keys($ids));
-
         try{
-            $idsArr = [$ids_str];
-            $response = self::get_instance()->stampInvoices($idsArr);
+            $response = self::get_instance()->stampInvoices($ids);
 
             foreach ($response['data'] as $invoice){
                 if ($invoice['success'] && isset($ids[$invoice['id']])){

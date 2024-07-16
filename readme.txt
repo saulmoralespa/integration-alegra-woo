@@ -5,7 +5,7 @@ Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, s
 Requires at least: 6.0
 Tested up to: 6.5.5
 Requires PHP: 8.0
-Stable tag: 0.0.6
+Stable tag: 0.0.7
 License: GNU General Public License v3.0
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -63,6 +63,8 @@ Sí, puede emitir desde una o masivamente hasta 10 facturas
 * Fixed tax in product
 = 0.0.6 =
 * Added discount in product
+= 0.0.7 =
+* Fixed emit invoices
 
 == Credits ==
 *  [Website](https://saulmoralespa.com) [Linkedin](https://www.linkedin.com/in/saulmoralespa/)
