@@ -79,6 +79,8 @@ class Integration_Alegra_WC
         foreach ( $ids as $post_id ) {
             $product = wc_get_product($post_id);
             if(!$product->get_sku() || $product->meta_exists('sync_alegra') ) continue;
+            $description_without_html = wp_strip_all_tags($product->get_description(), true);
+            $description = substr($description_without_html, 0,50);
 
             try{
                 $body = [
@@ -87,7 +89,7 @@ class Integration_Alegra_WC
                     "name" => $product->get_name(),
                     "type" => $product->is_virtual() || $product->is_downloadable() ? 'service' : 'product',
                     "reference" => $product->get_sku(),
-                    "description" => substr($product->get_description(), 0,50),
+                    "description" => $description,
                     //"category" => ["id" => 4356],
                     "inventory" => [
                         "unit" => $product->is_virtual() || $product->is_downloadable() ? 'service' : 'centimeter' //get_option( 'woocommerce_dimension_unit' )
@@ -196,6 +198,8 @@ class Integration_Alegra_WC
                 $product  = $item->get_product();
 
                 if(!$product || !$product->get_sku()) continue;
+                $description_without_html = wp_strip_all_tags($product->get_description(), true);
+                $description = substr($description_without_html, 0,50);
 
                 $query = [
                     "reference" => $product->get_sku()
@@ -211,7 +215,7 @@ class Integration_Alegra_WC
                         "name" => $product->get_name(),
                         "type" => $product->is_virtual() || $product->is_downloadable() ? 'service' : 'product',
                         "reference" => $product->get_sku(),
-                        "description" => substr($product->get_description(), 0,50),
+                        "description" => $description,
                         //"category" => ["id" => 4356],
                         "inventory" => [
                             "unit" => $product->is_virtual() || $product->is_downloadable() ? 'service' : 'centimeter' //get_option( 'woocommerce_dimension_unit' )
@@ -227,7 +231,7 @@ class Integration_Alegra_WC
                 $items_invoice[] = [
                     "id" => $item_id,
                     "name" => $product->get_name(),
-                    "description" => substr($product->get_description(), 0,50),
+                    "description" => $description,
                     "price" => wc_format_decimal( $order->get_line_total( $item ), 2 ),
                     "discount" => round(($item->get_subtotal() - $item->get_total()) / $item->get_subtotal() * 100),
                     "quantity" => $item->get_quantity()
