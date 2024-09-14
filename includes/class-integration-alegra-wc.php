@@ -232,7 +232,7 @@ class Integration_Alegra_WC
                     "id" => $item_id,
                     "name" => $product->get_name(),
                     "description" => $description,
-                    "price" => wc_format_decimal( $order->get_line_total( $item ), 2 ),
+                    "price" => wc_format_decimal($item->get_total() / $item->get_quantity(), 0),
                     "discount" => round(($item->get_subtotal() - $item->get_total()) / $item->get_subtotal() * 100),
                     "quantity" => $item->get_quantity()
                 ];
@@ -277,6 +277,14 @@ class Integration_Alegra_WC
                     "price" => wc_format_decimal($order->get_shipping_total(), 0),
                     "quantity" => 1
                 ];
+
+                if(self::$integration_setting->tax){
+                    $items_invoice[count($items_invoice) - 1]["tax"] = [
+                        [
+                            "id" => self::$integration_setting->tax
+                        ]
+                    ];
+                }
             }
 
             $data_invoice = [
