@@ -332,6 +332,9 @@ class Integration_Alegra_WC
             }
 
             $data_invoice = array_merge($data_invoice, $seller);
+            if(self::$integration_setting->debug === 'yes') {
+                integration_alegra_wc_smp()->log('createInvoice: ' . print_r($data_invoice, true));
+            }
             $data = self::get_instance()->createInvoice($data_invoice);
             $invoice_id = $data['id'];
             $order->add_order_note( sprintf( __( 'Factura de venta %s.' ), $invoice_id ) );
