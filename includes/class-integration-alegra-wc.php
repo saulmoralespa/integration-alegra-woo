@@ -1,6 +1,8 @@
 <?php
 
 use Saulmoralespa\Alegra\Client;
+use Automattic\WooCommerce\Blocks\Package;
+use Automattic\WooCommerce\Blocks\Domain\Services\CheckoutFields;
 
 class Integration_Alegra_WC
 {
@@ -127,23 +129,36 @@ class Integration_Alegra_WC
         if($order->meta_exists('invoice_id_alegra')) return;
 
         $items_invoice = [];
+        $field_type_document = 'document/type_document';
+        $field_dni = 'document/dni';
+        $checkout_fields = Package::container()->get( CheckoutFields::class );
+        $billing_type_document = $checkout_fields->get_field_from_object( $field_type_document, $order, 'billing' );
+        $shipping_type_document = $checkout_fields->get_field_from_object( $field_type_document, $order, 'shipping' );
+
+        $classic_type_document = get_post_meta( $order_id, '_billing_type_document', true ) ?: get_post_meta( $order_id, '_shipping_type_document', true );
+        $classic_dni = get_post_meta( $order_id, '_billing_dni', true ) ?: get_post_meta( $order_id, '_shipping_dni', true );
+
+        $billing_dni = $checkout_fields->get_field_from_object( $field_dni, $order, 'billing' );
+        $shipping_dni = $checkout_fields->get_field_from_object( $field_dni, $order, 'shipping' );
+
+        $type_document = $billing_type_document ?: $shipping_type_document ? : $classic_type_document;
+        $dni = $billing_dni ?: $shipping_dni ?: $classic_dni;
+        $dni = trim($dni);
 
         try{
             $items = $order->get_items();
 
-            $billing_type_document = get_post_meta( $order_id, '_billing_type_document', true ) ?: get_post_meta( $order_id, '_shipping_type_document', true );
-            $billing_dni = get_post_meta( $order_id, '_billing_dni', true ) ?: get_post_meta( $order_id, '_shipping_dni', true );
-
-            if(!$billing_dni) return;
+            if(!$dni) throw new Exception('DNI es vacío');
+            if(!$type_document) throw new Exception('Tipo de documento es vacío');
 
             $dv_nit = null;
 
-            if (str_contains($billing_dni, '-')){
-                [$billing_dni, $dv_nit] = explode('-', $billing_dni);
+            if (str_contains($dni, '-')){
+                [$dni, $dv_nit] = explode('-', $dni);
             }
 
             $query = [
-               "identification" => $billing_dni
+               "identification" => $dni
             ];
 
             $response = self::get_instance()->getContacts($query);
@@ -170,11 +185,11 @@ class Integration_Alegra_WC
                         "country" =>  $country_name,
                     ],
                     "identificationObject" => [
-                        "number" => $billing_dni,
-                        "type" => $billing_type_document
+                        "number" => $dni,
+                        "type" => $type_document
                     ],
-                    "kindOfPerson" => $billing_type_document === 'NIT' ? 'LEGAL_ENTITY' : "PERSON_ENTITY",
-                    "regime" =>  $billing_type_document === 'NIT' ? 'COMMON_REGIME' : "SIMPLIFIED_REGIME",
+                    "kindOfPerson" => $type_document === 'NIT' ? 'LEGAL_ENTITY' : "PERSON_ENTITY",
+                    "regime" =>  $type_document === 'NIT' ? 'COMMON_REGIME' : "SIMPLIFIED_REGIME",
                     "enableHealthSector" => false,
                     "phonePrimary" => $order->get_billing_phone() ?: $order->get_shipping_phone(),
                     "email" => $order->get_billing_email(),

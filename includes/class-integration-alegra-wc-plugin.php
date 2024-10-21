@@ -102,13 +102,40 @@ class Integration_Alegra_WC_Plugin
         add_filter( 'woocommerce_checkout_fields', array($this, 'document_woocommerce_fields'));
         add_action( 'woocommerce_checkout_process', array($this, 'very_nit_validation'));
         add_action( 'woocommerce_checkout_update_order_meta', array($this, 'custom_checkout_fields_update_order_meta'));
+        add_action('woocommerce_init', array($this, 'register_additional_checkout_fields'));
 
         add_action( 'woocommerce_order_status_changed', array( 'Integration_Alegra_WC', 'generate_invoice' ), 10, 3 );
         add_action( 'manage_shop_order_posts_custom_column', array($this, 'content_column_alegra_print_invoice') );
         add_action( 'admin_enqueue_scripts', array($this, 'enqueue_scripts_admin') );
         add_action( 'wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action( 'wp_ajax_integration_alegra_print_invoice', array($this, 'ajax_integration_alegra_print_invoice'));
-        add_action( 'woocommerce_admin_order_data_after_billing_address', array($this, 'document_admin_order_data_after_billing_address'), 10, 1 );
+        add_action('woocommerce_admin_order_data_after_order_details',  array($this, 'display_custom_editable_field_on_admin_orders'), 10);
+        add_action('woocommerce_process_shop_order_meta', array($this, 'save_order_custom_field_meta'), 10);
+
+        add_action(
+            'woocommerce_set_additional_field_value',
+            function ( $key, $value, $group, $wc_object ) {
+
+                if ('document/dni' !== $key ) {
+                    return;
+                }
+
+                $type_document_key = "_wc_$group/document/type_document";
+                $dni_key = "_wc_$group/document/dni";
+                $type_document = $wc_object->get_meta($type_document_key);
+                $dni = $wc_object->get_meta($dni_key);
+
+                if($type_document === 'NIT'){
+                    $dv = Integration_Alegra_WC::calculateDv($dni);
+                    $dni = "$dni-$dv";
+                }
+
+                $wc_object->update_meta_data($dni_key, $dni, true);
+                $wc_object->save();
+            },
+            10,
+            4
+        );
     }
 
     public function add_integration($integrations)
@@ -187,6 +214,44 @@ class Integration_Alegra_WC_Plugin
         return $columns;
     }
 
+    public function register_additional_checkout_fields(): void
+    {
+        woocommerce_register_additional_checkout_field(
+            array(
+                'id'       => 'document/type_document',
+                'label'    => 'Tipo de documento',
+                'location' => 'address',
+                'type'     => 'select',
+                'required' => true,
+                'options'  => [
+                    [
+                        'value' => 'CC',
+                        'label' => 'Cédula de ciudadanía'
+                    ],
+                    [
+                        'value' => 'NIT',
+                        'label' => '(NIT) Número de indentificación tributaria'
+                    ]
+                ]
+            )
+        );
+        woocommerce_register_additional_checkout_field(
+            array(
+                'id'            => 'document/dni',
+                'label'         => 'Número de documento',
+                'optionalLabel' => '1055666777',
+                'location'      => 'address',
+                'required'      => true,
+                'attributes'    => array(
+                    'autocomplete'     => 'billing_dni',
+                    'aria-describedby' => 'some-element',
+                    'aria-label'       => 'Número de documento',
+                    'pattern'          => '[0-9]{5,12}'
+                )
+            ),
+        );
+    }
+
     public function document_woocommerce_fields($fields): array
     {
         $fields['billing']['billing_type_document'] = array(
@@ -257,7 +322,7 @@ class Integration_Alegra_WC_Plugin
         return $fields;
     }
 
-    public function very_nit_validation()
+    public function very_nit_validation(): void
     {
         $billing_type_document = sanitize_text_field($_POST['billing_type_document']);
         $billing_dni = sanitize_text_field($_POST['billing_dni']);
@@ -287,14 +352,6 @@ class Integration_Alegra_WC_Plugin
         }
 
         update_post_meta( $order_id, $key_field_dni, $dni );
-    }
-
-    public function document_admin_order_data_after_billing_address($order)
-    {
-        ?>
-        <p><strong><?= __('Tipo de documento:'); ?></strong><br/> <?= get_post_meta( $order->get_id(), '_billing_type_document', true ) ?></p>
-        <p><strong><?= __('Número de documento:'); ?></strong><br/> <?= get_post_meta( $order->get_id(), '_billing_dni', true ) ?></p>
-        <?php
     }
 
     public function content_column_alegra_print_invoice($column): void
@@ -349,5 +406,44 @@ class Integration_Alegra_WC_Plugin
             $message = print_r($message, true);
         $logger = new WC_Logger();
         $logger->add('integration-alegra', $message);
+    }
+
+    public function display_custom_editable_field_on_admin_orders(WC_Order $order ): void
+    {
+        ?>
+        <div class="data_wrapper">
+            <?php
+            woocommerce_wp_select(array(
+                'id' => '_billing_type_document',
+                'value' => get_post_meta($order->get_id(), '_billing_type_document', true),
+                'label' => __('Tipo de documento:'),
+                'options' => [
+                    'CC' => 'Cédula de ciudadanía',
+                    'NIT' => '(NIT) Número de identificación tributaria'
+                ],
+                'wrapper_class' => 'wc-enhanced-select'
+            ));
+
+            woocommerce_wp_text_input( array(
+                'id' => '_billing_dni',
+                'value' => get_post_meta($order->get_id(), '_billing_dni', true),
+                'label' => __('Número de documento:'),
+                'wrapper_class' => 'form-field-wide'
+            ) );
+            ?>
+        </div>
+        <?php
+    }
+
+    public function save_order_custom_field_meta( $order_id ): void
+    {
+
+        if ( isset($_POST['_billing_type_document']) ){
+            update_post_meta($order_id, '_billing_type_document', sanitize_text_field($_POST['_billing_type_document']));
+        }
+        if ( isset($_POST['_billing_dni']) ){
+            update_post_meta($order_id, '_billing_dni', sanitize_text_field($_POST['_billing_dni']));
+        }
+
     }
 }
