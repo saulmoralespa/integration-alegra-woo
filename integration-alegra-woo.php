@@ -2,13 +2,16 @@
 /**
  * Plugin Name: Integration Alegra Woocommerce
  * Description: Integración del sistama contable y de facturación Alegra para Woocoommerce
- * Version: 0.0.12
- * Author: Saul Morales Pacheco
+ * Version: 0.0.13
+ * Author: Saúl Morales Pacheco
  * Author URI: https://saulmoralespa.com
  * License: GNU General Public License v3.0
  * License URI: http://www.gnu.org/licenses/gpl-3.0.html
- * WC tested up to: 8.6
- * WC requires at least: 4.0
+ * WC tested up to: 10.3
+ * WC requires at least: 9.6
+ * Requires at least: 6.0
+ * Tested up to: 6.9
+ * Requires PHP: 8.1
  * Requires Plugins: woocommerce
  */
 
@@ -17,10 +20,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if(!defined('INTEGRATION_ALEGRA_WC_SMP_VERSION')){
-    define('INTEGRATION_ALEGRA_WC_SMP_VERSION', '0.0.12');
+    define('INTEGRATION_ALEGRA_WC_SMP_VERSION', '0.0.13');
 }
 
 add_action( 'plugins_loaded', 'integration_alegra_wc_smp_init');
+add_action(
+        'before_woocommerce_init',
+        function () {
+            if ( class_exists( '\Automattic\WooCommerce\Utilities\FeaturesUtil' ) ) {
+                \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__ );
+            }
+        }
+);
+
 
 function integration_alegra_wc_smp_init(): void
 {
@@ -41,12 +53,12 @@ function integration_alegra_wc_smp_notices($notice): void
 function integration_alegra_wc_smp_requirements(): bool
 {
 
-    if ( !version_compare(PHP_VERSION, '8.0.0', '>=') ) {
+    if ( !version_compare(PHP_VERSION, '8.1.0', '>=') ) {
         if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
             add_action(
                 'admin_notices',
                 function() {
-                    integration_alegra_wc_smp_notices( 'Integration Alegra Woocommerce: Requiere la versión de php >= 8.0');
+                    integration_alegra_wc_smp_notices( 'Integration Alegra Woocommerce: Requiere la versión de php >= 8.1');
                 }
             );
         }

@@ -14,18 +14,7 @@ wc_enqueue_js( "
 
 $docs = "<p><a target='_blank' href='https://mi.alegra.com/integrations/api'>Ver datos de integraciones</a></p>";
 
-$sellers = $this->get_data_options('Integration_Alegra_WC::get_sellers', function($new_seller, $seller){
-    $new_seller[$seller["id"]] = $seller["name"];
-    return $new_seller;
-});
-
-$taxes = $this->get_data_options('Integration_Alegra_WC::get_taxes', function($new_tax, $tax){
-    if(!$tax["status"]) return $new_tax;
-    $new_tax[$tax["id"]] = "{$tax["name"]} - {$tax["percentage"]}%";
-    return $new_tax;
-});
-
-return apply_filters('integration_alegra_settings', [
+return [
     'enabled' => array(
         'title' => __('Activar/Desactivar'),
         'type' => 'checkbox',
@@ -37,7 +26,7 @@ return apply_filters('integration_alegra_settings', [
         'label'       => __( 'Habilitar el modo de desarrollador' ),
         'type'        => 'checkbox',
         'default'     => 'yes',
-        'description' => __( 'Enable debug mode to show debugging information in woocommerce - status' ),
+        'description' => __( 'Habilitar el modo de depuración para mostrar información de depuración en WooCommerce - estado' ),
         'desc_tip' => true
     ),
     'api'  => array(
@@ -83,24 +72,7 @@ return apply_filters('integration_alegra_settings', [
             'open' => 'Abierto'
         ),
         'default' => 'open',
-        'description' => __( 'El estado de la factura en la que se crea' ),
+        'description' => __( 'Estado en el que se crea la factura' ),
         'desc_tip' => false
     ),
-    'seller_generate_invoice' => array(
-        'title' => __( 'Vendedor' ),
-        'type' => 'select',
-        'options'  => $sellers,
-        'default' => '',
-        'description' => __( 'Vendedor asociado a la factura' ),
-        'desc_tip' => false
-    ),
-    'tax' => array(
-        'title' => __( 'Identificador único del impuesto' ),
-        'type' => 'select',
-        'class' => 'wc-enhanced-select',
-        'options'  => $taxes,
-        'default' => '',
-        'description' => __( 'El IVA que desea aplicar a los productos de la factura. Se recomienda incluir el IVA en los precios de los productos' ),
-        'desc_tip' => false
-    )
-]);
+];

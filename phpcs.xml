@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<ruleset name="Integration Alegra WooCommerce">
+    <description>WordPress Coding Standards for Integration Alegra WooCommerce Plugin</description>
+
+    <!-- Scan these files -->
+    <file>./includes</file>
+    <file>./integration-alegra-woo.php</file>
+
+    <!-- Exclude patterns -->
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+    <exclude-pattern>*/node_modules/*</exclude-pattern>
+    <exclude-pattern>*/tests/*</exclude-pattern>
+    <exclude-pattern>*/assets/*</exclude-pattern>
+
+    <!-- Show progress -->
+    <arg value="ps"/>
+
+    <!-- Colors in output -->
+    <arg name="colors"/>
+
+    <!-- Show sniff codes in all reports -->
+    <arg value="ns"/>
+
+    <!-- Use WordPress Coding Standards -->
+    <rule ref="WordPress">
+        <!-- Allow array short syntax -->
+        <exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
+
+        <!-- Allow short echo syntax -->
+        <exclude name="WordPress.Security.EscapeOutput"/>
+    </rule>
+
+    <!-- Use WordPress-Extra rules -->
+    <rule ref="WordPress-Extra">
+        <!-- Exclude some rules that might be too strict -->
+        <exclude name="WordPress.Files.FileName"/>
+        <exclude name="WordPress.NamingConventions.ValidVariableName"/>
+    </rule>
+
+    <!-- Use WordPress-Docs rules -->
+    <rule ref="WordPress-Docs"/>
+
+    <!-- Check for PHP cross-version compatibility -->
+    <config name="testVersion" value="8.1-"/>
+    <rule ref="PHPCompatibilityWP"/>
+
+    <!-- Minimum WordPress version -->
+    <config name="minimum_supported_wp_version" value="6.0"/>
+
+    <!-- Allow for plugin-specific exceptions -->
+    <rule ref="WordPress.WP.I18n">
+        <properties>
+            <property name="text_domain" type="array">
+                <element value="integration-alegra-woo"/>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- Verify that everything is properly prefixed -->
+    <rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+        <properties>
+            <property name="prefixes" type="array">
+                <element value="integration_alegra"/>
+                <element value="Integration_Alegra"/>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- Set the minimum supported WP version -->
+    <rule ref="WordPress.WP.DeprecatedFunctions">
+        <properties>
+            <property name="minimum_supported_version" value="6.0"/>
+        </properties>
+    </rule>
+</ruleset>
+

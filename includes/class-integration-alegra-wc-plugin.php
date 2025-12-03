@@ -39,7 +39,14 @@ class Integration_Alegra_WC_Plugin
     /**
      * @var bool
      */
-    private bool $_bootstrapped = false;
+    private bool $bootstrapped = false;
+
+    /**
+     * Logger instance.
+     *
+     * @var WC_Logger|null
+     */
+    private ?WC_Logger $logger = null;
 
     public function __construct(
         protected $file,
@@ -56,11 +63,11 @@ class Integration_Alegra_WC_Plugin
     public function run_alegra(): void
     {
         try {
-            if ($this->_bootstrapped) {
+            if ($this->bootstrapped) {
                 throw new Exception('Integration Alegra Woocommerce can only be called once');
             }
             $this->run();
-            $this->_bootstrapped = true;
+            $this->bootstrapped = true;
         } catch (Exception $e) {
             if (is_admin() && !defined('DOING_AJAX')) {
                 add_action('admin_notices', function () use ($e) {
@@ -96,16 +103,19 @@ class Integration_Alegra_WC_Plugin
         add_filter( 'plugin_action_links_' . plugin_basename($this->file), array($this, 'plugin_action_links'));
         add_filter( 'bulk_actions-edit-product', array($this, 'sync_bulk_actions'), 20 );
         add_filter( 'bulk_actions-edit-shop_order', array($this, 'emit_invoices_bulk_actions'), 20 );
+        add_filter( 'bulk_actions-woocommerce_page_wc-orders', array($this, 'emit_invoices_bulk_actions'), 20);
         add_filter( 'handle_bulk_actions-edit-product', array($this, 'sync_bulk_action_edit_product'), 10, 3 );
         add_filter( 'handle_bulk_actions-edit-shop_order', array($this, 'emit_invoices_bulk_action_edit_shop_order'), 10, 3 );
-        add_filter( 'manage_edit-shop_order_columns', array($this, 'alegra_print_invoice'), 20 );
-        add_filter( 'woocommerce_checkout_fields', array($this, 'document_woocommerce_fields'));
+        add_action( 'handle_bulk_actions-woocommerce_page_wc-orders', array($this, 'emit_invoices_bulk_action_edit_shop_order'), 20, 3 );
+        add_filter( 'manage_woocommerce_page_wc-orders_columns', array($this, 'alegra_print_invoice'));
+        add_filter('woocommerce_default_address_fields', array($this, 'document_woocommerce_fields')); #allow edit address fields
+        add_action('woocommerce_checkout_update_order_meta', array($this, 'document_woocommerce_fields_update_order_meta'));
         add_action( 'woocommerce_checkout_process', array($this, 'very_nit_validation'));
-        add_action( 'woocommerce_checkout_update_order_meta', array($this, 'custom_checkout_fields_update_order_meta'));
+        //add_action( 'woocommerce_checkout_update_order_meta', array($this, 'custom_checkout_fields_update_order_meta'));
         add_action('woocommerce_init', array($this, 'register_additional_checkout_fields'));
 
         add_action( 'woocommerce_order_status_changed', array( 'Integration_Alegra_WC', 'generate_invoice' ), 10, 3 );
-        add_action( 'manage_shop_order_posts_custom_column', array($this, 'content_column_alegra_print_invoice') );
+        add_action( 'manage_woocommerce_page_wc-orders_custom_column', array($this, 'content_column_alegra_print_invoice'), 10, 2 );
         add_action( 'admin_enqueue_scripts', array($this, 'enqueue_scripts_admin') );
         add_action( 'wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action( 'wp_ajax_integration_alegra_print_invoice', array($this, 'ajax_integration_alegra_print_invoice'));
@@ -126,7 +136,7 @@ class Integration_Alegra_WC_Plugin
                 $dni = $wc_object->get_meta($dni_key);
 
                 if($type_document === 'NIT'){
-                    $dv = Integration_Alegra_WC::calculateDv($dni);
+                    $dv = Integration_Alegra_WC::calculate_dv($dni);
                     $dni = "$dni-$dv";
                 }
 
@@ -151,31 +161,31 @@ class Integration_Alegra_WC_Plugin
         return $links;
     }
 
-    public function sync_bulk_actions($bulk_actions): array
+    /**
+     * Check if Alegra integration is properly configured and enabled.
+     *
+     * @return bool True if integration is enabled and configured, false otherwise.
+     */
+    private function is_alegra_integration_enabled(): bool
     {
         $settings = get_option('woocommerce_wc_alegra_integration_settings');
 
-        if(isset($settings['user']) &&
-            $settings['user'] &&
-            isset($settings['token']) &&
-            $settings['token'] &&
-            $settings['enabled'] === 'yes'
-        ){
+        return !empty($settings['user']) &&
+               !empty($settings['token']) &&
+               $settings['enabled'] === 'yes';
+    }
+
+    public function sync_bulk_actions($bulk_actions): array
+    {
+        if ($this->is_alegra_integration_enabled()) {
             $bulk_actions['integration_alegra_sync'] = 'Sincronizar productos Alegra';
         }
         return $bulk_actions;
     }
 
-    public function emit_invoices_bulk_actions($bulk_actions) : array
+    public function emit_invoices_bulk_actions(array $bulk_actions) : array
     {
-        $settings = get_option('woocommerce_wc_alegra_integration_settings');
-
-        if(isset($settings['user']) &&
-            $settings['user'] &&
-            isset($settings['token']) &&
-            $settings['token'] &&
-            $settings['enabled'] === 'yes'
-        ){
+        if ($this->is_alegra_integration_enabled()) {
             $bulk_actions['integration_alegra_emit_invoices'] = 'Emitir facturas Alegra';
         }
         return $bulk_actions;
@@ -201,13 +211,7 @@ class Integration_Alegra_WC_Plugin
 
     public function alegra_print_invoice($columns) : array
     {
-        $settings = get_option('woocommerce_wc_alegra_integration_settings');
-        if(isset($settings['user']) &&
-            $settings['user'] &&
-            isset($settings['token']) &&
-            $settings['token'] &&
-            $settings['enabled'] === 'yes'
-        ){
+        if ($this->is_alegra_integration_enabled()) {
             $columns['integration_alegra_print_invoice'] = 'Factura';
         }
 
@@ -254,7 +258,7 @@ class Integration_Alegra_WC_Plugin
 
     public function document_woocommerce_fields($fields): array
     {
-        $fields['billing']['billing_type_document'] = array(
+        $fields['document'] = array(
             'label'       => __('Tipo de documento'),
             'placeholder' => _x('', 'placeholder'),
             'required'    => true,
@@ -271,10 +275,11 @@ class Integration_Alegra_WC_Plugin
                 'TI' => __('Tarjeta de identidad'),
                 'RC' => __('Registro civil'),
                 'FOREIGN_NIT' => __('NIT de otro país')
-            )
+            ),
+            'class' => array('class_field_type_document')
         );
 
-        $fields['billing']['billing_dni'] = array(
+        $fields['dni'] = array(
             'label' => __('Número de documento'),
             'placeholder' => _x('', 'placeholder'),
             'required' => true,
@@ -283,43 +288,40 @@ class Integration_Alegra_WC_Plugin
             'custom_attributes' => array(
                 'minlength' => 5
             ),
-            'class' => array('my-css')
-        );
-
-
-        $fields['shipping']['shipping_type_document'] = array(
-            'label'       => __('Tipo de documento'),
-            'placeholder' => _x('', 'placeholder'),
-            'required'    => true,
-            'clear'       => false,
-            'type'        => 'select',
-            'default' => 'CC',
-            'options'     => array(
-                'CC' => __('Cédula de ciudadanía' ),
-                'NIT' => __('(NIT) Número de indentificación tributaria'),
-                'CE' => __('Cédula de extranjería'),
-                'DIE' => __('Documento de identificación extranjero'),
-                'TE' => __('Tarjeta de extranjería'),
-                'PP' => __('Pasaporte'),
-                'TI' => __('Tarjeta de identidad'),
-                'RC' => __('Registro civil'),
-                'FOREIGN_NIT' => __('NIT de otro país')
-            )
-        );
-
-        $fields['shipping']['shipping_dni'] = array(
-            'label' => __('Número de documento'),
-            'placeholder' => _x('', 'placeholder'),
-            'required' => true,
-            'clear'    => false,
-            'type' => 'number',
-            'custom_attributes' => array(
-                'minlength' => 5
-            ),
-            'class' => array('my-css')
+            'class' => array('class_field_dni')
         );
 
         return $fields;
+    }
+
+    public function document_woocommerce_fields_update_order_meta($order_id): void
+    {
+        $this->updated_address('billing', $order_id);
+
+        if(!empty($_POST['ship_to_different_address'])) {
+            $this->updated_address('shipping', $order_id);
+        }
+    }
+
+    private function updated_address(string $prefix, $order_id): void
+    {
+        if (!empty($_POST[ "{$prefix}_type_document" ])) {
+            $type_document = sanitize_text_field($_POST[ "{$prefix}_type_document" ]);
+            update_post_meta($order_id, "_{$prefix}_type_document", $type_document);
+        }
+
+        if (!empty($_POST[ "{$prefix}_dni" ])) {
+            $dni = sanitize_text_field($_POST[ "{$prefix}_dni" ]);
+            update_post_meta($order_id, "_{$prefix}_dni", $dni);
+        }
+
+        if(isset($dni) &&
+            isset($type_document) &&
+            $type_document === 'NIT'){
+            $dv = Integration_Alegra_WC::calculate_dv($dni);
+            $dni = "$dni-$dv";
+            update_post_meta($order_id, "_{$prefix}_dni", $dni);
+        }
     }
 
     public function very_nit_validation(): void
@@ -348,7 +350,7 @@ class Integration_Alegra_WC_Plugin
         $dni = $billing_dni ?: $shipping_dni;
 
         if($type_document === 'NIT'){
-            $dv = Integration_Alegra_WC::calculateDv($dni);
+            $dv = Integration_Alegra_WC::calculate_dv($dni);
             $dni = "$dni-$dv";
         }
 
@@ -356,14 +358,11 @@ class Integration_Alegra_WC_Plugin
         update_post_meta( $order_id, $key_field_dni, $dni );
     }
 
-    public function content_column_alegra_print_invoice($column): void
+    public function content_column_alegra_print_invoice(string $column, $order): void
     {
-        global $post;
 
-        $order = new WC_Order($post->ID);
-
-        $invoice_id_alegra = get_post_meta($order->get_id(), 'invoice_id_alegra', true);
-        $dian_state = get_post_meta($order->get_id(), 'invoice_emit_alegra', true);
+        $invoice_id_alegra = $order->get_meta('_invoice_id_alegra');
+        $dian_state = $order->get_meta('_invoice_emit_alegra');
         $class_dian_state = $dian_state  ? 'order-status status-processing' : 'order-status status-on-hold';
 
         if(!empty($invoice_id_alegra) && $column == 'integration_alegra_print_invoice'){
@@ -373,13 +372,13 @@ class Integration_Alegra_WC_Plugin
 
     public function enqueue_scripts_admin($hook): void
     {
-        if ($hook === 'edit.php'){
+        if ($hook === 'woocommerce_page_wc-orders'){
             wp_enqueue_script( 'integration-alegra', $this->assets. 'js/integration-alegra.js', array( 'jquery' ), $this->version, true );
             wp_enqueue_script( 'integration-alegra-sweet-alert', $this->assets. 'js/sweetalert2.min.js', array( 'jquery' ), $this->version, true );
         }
     }
 
-    public function enqueue_scripts()
+    public function enqueue_scripts(): void
     {
         if ( is_checkout() ) {
             wp_enqueue_script( 'integration-alegra-field-dni', $this->plugin_url . 'assets/js/field-dni-checkout.js', array( 'jquery' ), $this->version, true );
@@ -402,12 +401,28 @@ class Integration_Alegra_WC_Plugin
 
     }
 
-    public function log($message): void
-    {
-        if (is_array($message) || is_object($message))
-            $message = print_r($message, true);
-        $logger = new WC_Logger();
-        $logger->add('integration-alegra', $message);
+    /**
+     * Log a message to the WooCommerce logger.
+     *
+     * @param mixed  $message The message to log (string, array, or object).
+     * @param string $level   The log level (debug, info, notice, warning, error, critical, alert, emergency).
+     * @return void
+     */
+    public function log( mixed $message, string $level = 'info' ): void {
+        if ( ! $this->logger ) {
+            $this->logger = wc_get_logger();
+        }
+
+        // Convert arrays and objects to JSON format for better readability.
+        if ( is_array( $message ) || is_object( $message ) ) {
+            $message = wp_json_encode( $message, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE );
+        }
+
+        $this->logger->log(
+            $level,
+            $message,
+            array( 'source' => 'integration-alegra' )
+        );
     }
 
     public function display_custom_editable_field_on_admin_orders(WC_Order $order ): void

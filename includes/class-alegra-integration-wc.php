@@ -1,5 +1,9 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
 class WC_Alegra_Integration extends WC_Integration
 {
     public string $debug;
@@ -24,12 +28,33 @@ class WC_Alegra_Integration extends WC_Integration
         $this->token = $this->get_option( 'token' );
         $this->status_generate_invoice = $this->get_option( 'order_status_generate_invoice' );
 
+        add_filter( 'woocommerce_settings_api_form_fields_' .  $this->id, array( $this, 'add_additional_settings' ) );
         add_action( 'woocommerce_update_options_integration_' .  $this->id, array( $this, 'process_admin_options' ) );
     }
 
     public function init_form_fields(): void
     {
         $this->form_fields = include(dirname(__FILE__) . '/admin/settings.php');
+    }
+
+    public function add_additional_settings(array $settings): array
+    {
+        $additional_settings = [];
+
+        if ( empty( $this->settings ) ) {
+            return $settings;
+        }
+
+        $user = $this->get_option('user');
+        $token = $this->get_option('token');
+
+        if ($user && $token) {
+            $additional_settings = include(dirname(__FILE__) . '/admin/other_settings.php');
+        }
+
+        $settings = array_merge($settings, $additional_settings);
+
+        return apply_filters('integration_alegra_settings', $settings);
     }
 
     public function is_available(): bool
