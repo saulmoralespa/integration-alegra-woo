@@ -64,14 +64,45 @@ class WC_Alegra_Integration extends WC_Integration
             !empty($this->token);
     }
 
-    public function validate_password_field($key, $value) :string
-    {
-        if($this->get_option('user') !== '' && $key === 'token'){
-            $status = Integration_Alegra_WC::test_auth($this->get_option('user'), $value);
-            if(!$status){
-                WC_Admin_Settings::add_error("Credenciales inválidas");
-                $value = '';
-            }
+    /**
+     * Validate password field (token).
+     *
+     * @param string $key   Field key.
+     * @param string $value Field value.
+     * @return string Validated value.
+     */
+    public function validate_password_field( $key, $value ): string {
+        // Sanitize the input value.
+        $value = sanitize_text_field( $value );
+
+        // Only validate token when user is already configured.
+        if ( 'token' !== $key ) {
+            return $value;
+        }
+
+        // If token is empty, return it (will be caught by required validation).
+        if ( empty( $value ) ) {
+            return $value;
+        }
+
+        $user = $this->get_option( 'user' );
+
+        // User must be set before validating token.
+        if ( empty( $user ) ) {
+            WC_Admin_Settings::add_error(
+                __( 'Por favor, configure el usuario antes de ingresar el token.', 'integration-alegra-woo' )
+            );
+            return '';
+        }
+
+        // Test authentication with Alegra API.
+        $is_valid = Integration_Alegra_WC::test_auth( $user, $value );
+
+        if ( ! $is_valid ) {
+            WC_Admin_Settings::add_error(
+                __( 'Las credenciales proporcionadas son inválidas. Por favor, verifique el usuario y el token.', 'integration-alegra-woo' )
+            );
+            return '';
         }
 
         return $value;
