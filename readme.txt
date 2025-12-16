@@ -5,7 +5,7 @@ Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, s
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.0.13
+Stable tag: 0.0.14
 WC requires at least: 9.6
 WC tested up to: 10.3
 License: GNU General Public License v3.0
@@ -189,38 +189,11 @@ Sí, el plugin incluye una opción de sincronización masiva de productos desde 
 
 == Changelog ==
 
-= 0.0.1 =
-* Initial beta release
-= 0.0.2 =
-* Fixed discount product
-* Updated show fields in order view
-= 0.0.3 =
-* Added option select seller
-* Added option select invoice status
-* Updated valid NIT
-* Updated create contact
-= 0.0.4 =
-* Fixed generate invoice
-= 0.0.5 =
-* Added option select tax
-* Added item shipping cost
-* Fixed tax in product
-= 0.0.6 =
-* Added discount in product
-= 0.0.7 =
-* Fixed emit invoices
-= 0.0.8 =
-* Fixed get description product
-* Updated compatibility with wordPress
-= 0.0.9 =
-* Fixed price item
-* Added tax to shipping item
-= 0.0.10 =
-* Added log create invoice
-= 0.0.11 =
-* Updated fields document, compatibility with checkout block
-= 0.0.12 =
-* Fixed save type document
+= 0.0.14 =
+* Add invoice settings for order and invoice status configuration
+* Refactor invoice column handling in WooCommerce admin orders
+* Remove unused product description from invoice item data
+* Enhance token validation with improved error handling and sanitization
 = 0.0.13 =
 * Added option to control automatic client creation in Alegra
 * Added option to control automatic product creation in Alegra
@@ -232,6 +205,38 @@ Sí, el plugin incluye una opción de sincronización masiva de productos desde 
 * Refactored calculateDv to calculate_dv following WordPress coding standards
 * Added protection against division by zero in discount calculations
 * Improved code documentation with comprehensive PHPDoc blocks
+= 0.0.12 =
+* Fixed save type document
+= 0.0.11 =
+* Updated fields document, compatibility with checkout block
+= 0.0.10 =
+* Added log create invoice
+= 0.0.9 =
+* Fixed price item
+* Added tax to shipping item
+= 0.0.8 =
+* Fixed get description product
+* Updated compatibility with wordPress
+= 0.0.7 =
+* Fixed emit invoices
+= 0.0.6 =
+* Added discount in product
+= 0.0.5 =
+* Added option select tax
+* Added item shipping cost
+* Fixed tax in product
+= 0.0.4 =
+* Fixed generate invoice
+= 0.0.3 =
+* Added option select seller
+* Added option select invoice status
+* Updated valid NIT
+* Updated create contact
+= 0.0.2 =
+* Fixed discount product
+* Updated show fields in order view
+= 0.0.1 =
+* Initial beta release
 
 == Credits ==
 *  [Website](https://saulmoralespa.com) [Linkedin](https://www.linkedin.com/in/saulmoralespa/)
