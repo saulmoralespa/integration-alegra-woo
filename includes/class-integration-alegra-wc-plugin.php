@@ -107,15 +107,16 @@ class Integration_Alegra_WC_Plugin
         add_filter( 'handle_bulk_actions-edit-product', array($this, 'sync_bulk_action_edit_product'), 10, 3 );
         add_filter( 'handle_bulk_actions-edit-shop_order', array($this, 'emit_invoices_bulk_action_edit_shop_order'), 10, 3 );
         add_action( 'handle_bulk_actions-woocommerce_page_wc-orders', array($this, 'emit_invoices_bulk_action_edit_shop_order'), 20, 3 );
-        add_filter( 'manage_woocommerce_page_wc-orders_columns', array($this, 'alegra_print_invoice'));
-        add_filter('woocommerce_default_address_fields', array($this, 'document_woocommerce_fields')); #allow edit address fields
+        add_filter( 'manage_shop_order_posts_columns', array( $this, 'alegra_print_invoice' ), 99 );
+        add_filter( 'manage_woocommerce_page_wc-orders_columns', array($this, 'alegra_print_invoice'), 99);
+        add_filter('woocommerce_default_address_fields', array($this, 'document_woocommerce_fields'));
         add_action('woocommerce_checkout_update_order_meta', array($this, 'document_woocommerce_fields_update_order_meta'));
         add_action( 'woocommerce_checkout_process', array($this, 'very_nit_validation'));
         //add_action( 'woocommerce_checkout_update_order_meta', array($this, 'custom_checkout_fields_update_order_meta'));
         add_action('woocommerce_init', array($this, 'register_additional_checkout_fields'));
 
         add_action( 'woocommerce_order_status_changed', array( 'Integration_Alegra_WC', 'generate_invoice' ), 10, 3 );
-        add_action( 'manage_woocommerce_page_wc-orders_custom_column', array($this, 'content_column_alegra_print_invoice'), 10, 2 );
+        add_action( 'manage_woocommerce_page_wc-orders_custom_column', array($this, 'content_column_alegra_print_invoice'), 99, 2 );
         add_action( 'admin_enqueue_scripts', array($this, 'enqueue_scripts_admin') );
         add_action( 'wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action( 'wp_ajax_integration_alegra_print_invoice', array($this, 'ajax_integration_alegra_print_invoice'));
@@ -209,7 +210,7 @@ class Integration_Alegra_WC_Plugin
         return $redirect_to;
     }
 
-    public function alegra_print_invoice($columns) : array
+    public function alegra_print_invoice(array $columns) : array
     {
         if ($this->is_alegra_integration_enabled()) {
             $columns['integration_alegra_print_invoice'] = 'Factura';
