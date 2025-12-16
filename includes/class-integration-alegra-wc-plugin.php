@@ -258,7 +258,7 @@ class Integration_Alegra_WC_Plugin
 
     public function document_woocommerce_fields($fields): array
     {
-        $fields['document'] = array(
+        $fields['type_document'] = array(
             'label'       => __('Tipo de documento'),
             'placeholder' => _x('', 'placeholder'),
             'required'    => true,
