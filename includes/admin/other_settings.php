@@ -19,6 +19,29 @@ $taxes = array_merge(
 );
 
 return [
+    'invoice'  => array(
+        'title' => __( 'Facturas de ventas' ),
+        'type'  => 'title'
+    ),
+    'order_status_generate_invoice' => array(
+        'title' => __( 'Estado del pedido' ),
+        'type' => 'select',
+        'options'  => wc_get_order_statuses(),
+        'default' => 'wc-processing',
+        'description' => __( 'El estado del pedido en el que se genera la factura' ),
+        'desc_tip' => false
+    ),
+    'status_generate_invoice' => array(
+        'title' => __( 'Estado de la factura' ),
+        'type' => 'select',
+        'options'  => array(
+            'draft' => 'Borrador',
+            'open' => 'Abierto'
+        ),
+        'default' => 'open',
+        'description' => __( 'Estado en el que se crea la factura' ),
+        'desc_tip' => false
+    ),
     'seller_generate_invoice' => array(
         'title' => __( 'Vendedor' ),
         'type' => 'select',
