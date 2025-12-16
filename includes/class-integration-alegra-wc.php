@@ -550,7 +550,6 @@ class Integration_Alegra_WC
      * @return array Datos del item formateados para la factura
      */
     private static function build_invoice_item_data( WC_Order_Item $item, WC_Product $product, int $item_id ): array {
-        $description = self::get_product_description( $product );
         $quantity    = $item->get_quantity();
         $subtotal    = $item->get_subtotal();
         $total       = $item->get_total();
@@ -558,7 +557,6 @@ class Integration_Alegra_WC
         $invoice_item = array(
             'id'          => $item_id,
             'name'        => $product->get_name(),
-            'description' => $description,
             'price'       => wc_format_decimal( $total / $quantity, 0 ),
             'discount'    => self::calculate_item_discount_percentage( $subtotal, $total ),
             'quantity'    => $quantity,
