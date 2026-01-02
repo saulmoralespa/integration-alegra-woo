@@ -5,7 +5,7 @@ Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, s
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.0.14
+Stable tag: 0.0.15
 WC requires at least: 9.6
 WC tested up to: 10.3
 License: GNU General Public License v3.0
@@ -188,6 +188,10 @@ Sí, el plugin incluye una opción de sincronización masiva de productos desde 
 5.  screenshot-5.png
 
 == Changelog ==
+
+= 0.0.15 =
+* Added support for Cost Centers (Centros de costo) in invoice generation
+* Added Cost Center configuration in settings
 
 = 0.0.14 =
 * Add invoice settings for order and invoice status configuration

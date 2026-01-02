@@ -393,6 +393,23 @@ class Client
         }
     }
 
+    public function getCostCenters($query = []):array
+    {
+        try {
+            $response = $this->client()->get("cost-centers", [
+                "headers" => [
+                    "Accept" => "application/json",
+                    "Authorization" => "Basic " . base64_encode("$this->user:$this->pass")
+                ],
+                "query" => $query
+            ]);
+            return self::responseJson($response->getBody()->getContents());
+        }catch (RequestException $exception){
+            $message = self::handleErrors($exception);
+            throw new \Exception($message);
+        }
+    }
+
     public function getSellers($query = []):array
     {
         try {

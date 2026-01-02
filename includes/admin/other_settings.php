@@ -6,17 +6,17 @@ $sellers = $this->get_data_options('Integration_Alegra_WC::get_sellers', functio
     return $new_seller;
 });
 
+$cost_centers = $this->get_data_options('Integration_Alegra_WC::get_cost_centers', function($new_cost_center, $cost_center){
+    if($cost_center["status"] !== 'active') return $new_cost_center;
+    $new_cost_center[$cost_center["id"]] = $cost_center["name"];
+    return $new_cost_center;
+});
+
 $taxes = $this->get_data_options('Integration_Alegra_WC::get_taxes', function($new_tax, $tax){
     if($tax["status"] !== 'active') return $new_tax;
     $new_tax[$tax["id"]] = "{$tax["name"]} - {$tax["percentage"]}%";
     return $new_tax;
 });
-
-// Agregar opción por defecto sin impuesto
-$taxes = array_merge(
-    array('' => __('Sin impuesto')),
-    $taxes
-);
 
 return [
     'invoice'  => array(
@@ -48,6 +48,14 @@ return [
         'options'  => $sellers,
         'default' => '',
         'description' => __( 'Vendedor asociado a la factura' ),
+        'desc_tip' => false
+    ),
+    'cost_center_generate_invoice' => array(
+        'title' => __( 'Centro de costo' ),
+        'type' => 'select',
+        'options'  => $cost_centers,
+        'default' => '',
+        'description' => __( 'Centro de costo asociado a la factura' ),
         'desc_tip' => false
     ),
     'client'  => array(

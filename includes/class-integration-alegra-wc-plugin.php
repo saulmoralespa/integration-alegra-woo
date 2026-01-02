@@ -243,14 +243,14 @@ class Integration_Alegra_WC_Plugin
         woocommerce_register_additional_checkout_field(
             array(
                 'id'            => 'document/dni',
-                'label'         => 'Número de documento',
+                'label'         => 'Número de documento (sin DV)',
                 'optionalLabel' => '1055666777',
                 'location'      => 'address',
                 'required'      => true,
                 'attributes'    => array(
                     'autocomplete'     => 'billing_dni',
                     'aria-describedby' => 'some-element',
-                    'aria-label'       => 'Número de documento',
+                    'aria-label'       => 'Número de documento (sin DV)',
                     'pattern'          => '[0-9]{5,12}'
                 )
             ),
@@ -281,7 +281,7 @@ class Integration_Alegra_WC_Plugin
         );
 
         $fields['dni'] = array(
-            'label' => __('Número de documento'),
+            'label' => __('Número de documento (sin DV)'),
             'placeholder' => _x('', 'placeholder'),
             'required' => true,
             'clear' => false,

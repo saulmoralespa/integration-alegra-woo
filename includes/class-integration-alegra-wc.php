@@ -49,6 +49,24 @@ class Integration_Alegra_WC
         return self::$alegra;
     }
 
+    public static function get_cost_centers(): array
+    {
+        $cost_centers = [];
+
+        if (!self::get_instance()) return $cost_centers;
+
+        try{
+            $query = [
+                "status" => "active"
+            ];
+            $cost_centers = self::get_instance()->getCostCenters($query);
+        }catch(Exception $exception){
+            integration_alegra_wc_smp()->log($exception->getMessage());
+        }
+
+        return $cost_centers;
+    }
+
     public static function get_sellers(): array
     {
         $sellers = [];
@@ -227,6 +245,11 @@ class Integration_Alegra_WC
             ];
 
             $data_invoice = array_merge($data_invoice, $seller);
+
+            if ( ! empty( self::$integration_settings->cost_center_generate_invoice ) ) {
+                $data_invoice['costCenter'] = self::$integration_settings->cost_center_generate_invoice;
+            }
+
             if(self::$integration_settings->debug === 'yes') {
                 integration_alegra_wc_smp()->log('createInvoice: ' . print_r($data_invoice, true));
             }
