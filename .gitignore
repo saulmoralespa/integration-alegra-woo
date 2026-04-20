@@ -2,4 +2,5 @@
 /wordpress/
 /node_modules
 .env
+phpunit.xml
 .phpunit.result.cache

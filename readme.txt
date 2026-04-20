@@ -5,9 +5,9 @@ Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, s
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.0.15
+Stable tag: 0.1.0
 WC requires at least: 9.6
-WC tested up to: 10.3
+WC tested up to: 10.7
 License: GNU General Public License v3.0
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 
@@ -188,6 +188,14 @@ Sí, el plugin incluye una opción de sincronización masiva de productos desde 
 5.  screenshot-5.png
 
 == Changelog ==
+
+= 0.1.0 =
+* Added payment mapping configuration by WooCommerce gateway in a dedicated "Métodos de pago" section
+* Added mapping to Alegra payment methods and active Alegra bank accounts
+* Added strict validation to require complete mapping for every active WooCommerce gateway
+* Updated invoice generation to use mapped payment method and bank account in the payments payload
+* Added support to keep and edit mappings for inactive gateways with previous configuration
+* Added automated tests for payment mapping resolution and settings validation
 
 = 0.0.15 =
 * Added support for Cost Centers (Centros de costo) in invoice generation

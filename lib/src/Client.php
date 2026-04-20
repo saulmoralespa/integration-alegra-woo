@@ -669,6 +669,25 @@ class Client
     }
 
 
+    public function getBankAccounts($query = []):array
+    {
+        try {
+            $response = $this->client()->get("bank-accounts", [
+                "headers" => [
+                    "Content-Type" => "application/json",
+                    "Accept" => "application/json",
+                    "Authorization" => "Basic " . base64_encode("$this->user:$this->pass")
+                ],
+                "query" => $query
+            ]);
+            return self::responseJson($response->getBody()->getContents());
+        }catch (RequestException $exception){
+            $message = self::handleErrors($exception);
+            throw new \Exception($message);
+        }
+    }
+
+
     public static function responseJson(string $response):array
     {
         return Utils::jsonDecode($response, true);

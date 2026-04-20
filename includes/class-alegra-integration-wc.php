@@ -113,4 +113,253 @@ class WC_Alegra_Integration extends WC_Integration
         $data = isset($_GET['section']) && $_GET['section'] === $this->id ? $method() : [];
         return array_reduce($data, $callback, []);
     }
+
+    public function generate_payment_mappings_table_html($key, $data): string
+    {
+        $defaults = [
+            'title' => '',
+            'description' => '',
+            'payment_methods' => [],
+            'bank_accounts' => [],
+            'active_gateways' => [],
+            'all_gateways' => [],
+        ];
+
+        $data = wp_parse_args($data, $defaults);
+        $field_key = $this->get_field_key($key);
+        $saved_mappings = $this->sanitize_payment_gateways_mapping_input($this->get_option($key, []));
+        $rows = $this->get_payment_mapping_rows($data['active_gateways'], $data['all_gateways'], $saved_mappings);
+
+        ob_start();
+        ?>
+        <tr valign="top">
+            <th scope="row" class="titledesc">
+                <label><?php echo esc_html($data['title']); ?></label>
+            </th>
+            <td class="forminp">
+                <?php if ( empty($rows) ): ?>
+                    <p><?php echo esc_html__('No hay métodos de pago activos disponibles en WooCommerce para mapear.', 'integration-alegra-woo'); ?></p>
+                <?php else: ?>
+                    <table class="widefat striped">
+                        <thead>
+                            <tr>
+                                <th><?php echo esc_html__('Gateway WooCommerce', 'integration-alegra-woo'); ?></th>
+                                <th><?php echo esc_html__('Método de pago en Alegra', 'integration-alegra-woo'); ?></th>
+                                <th><?php echo esc_html__('Cuenta bancaria en Alegra', 'integration-alegra-woo'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($rows as $gateway_id => $gateway_data): ?>
+                            <?php
+                            $saved_method = $saved_mappings[$gateway_id]['payment_method'] ?? '';
+                            $saved_account = $saved_mappings[$gateway_id]['account_id'] ?? '';
+                            $gateway_label = $gateway_data['label'];
+                            if (!$gateway_data['active']) {
+                                $gateway_label .= ' (' . __('inactivo', 'integration-alegra-woo') . ')';
+                            }
+                            ?>
+                            <tr>
+                                <td>
+                                    <strong><?php echo esc_html($gateway_label); ?></strong>
+                                    <br/>
+                                    <small><?php echo esc_html($gateway_id); ?></small>
+                                </td>
+                                <td>
+                                    <select name="<?php echo esc_attr(sprintf('%s[%s][payment_method]', $field_key, $gateway_id)); ?>">
+                                        <option value=""><?php echo esc_html__('Seleccionar método...', 'integration-alegra-woo'); ?></option>
+                                        <?php foreach ($data['payment_methods'] as $method_key => $method_label): ?>
+                                            <option value="<?php echo esc_attr($method_key); ?>" <?php selected($saved_method, $method_key); ?>>
+                                                <?php echo esc_html($method_label); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="<?php echo esc_attr(sprintf('%s[%s][account_id]', $field_key, $gateway_id)); ?>">
+                                        <option value=""><?php echo esc_html__('Seleccionar cuenta...', 'integration-alegra-woo'); ?></option>
+                                        <?php foreach ($data['bank_accounts'] as $account_id => $account_label): ?>
+                                            <option value="<?php echo esc_attr($account_id); ?>" <?php selected($saved_account, (string) $account_id); ?>>
+                                                <?php echo esc_html($account_label); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+
+                <?php if (!empty($data['description'])): ?>
+                    <p class="description"><?php echo wp_kses_post($data['description']); ?></p>
+                <?php endif; ?>
+            </td>
+        </tr>
+        <?php
+
+        return ob_get_clean();
+    }
+
+    public function validate_payment_mappings_table_field($key, $value): array
+    {
+        $existing_value = $this->get_option($key, []);
+
+        if (!is_array($existing_value)) {
+            $existing_value = [];
+        }
+
+        $sanitized_mapping = $this->sanitize_payment_gateways_mapping_input($value);
+        $active_gateways = Integration_Alegra_WC::get_wc_payment_gateways(true);
+        $bank_accounts = Integration_Alegra_WC::get_bank_accounts();
+        $available_bank_accounts = [];
+
+        foreach ($bank_accounts as $bank_account) {
+            if (($bank_account['status'] ?? '') !== 'active') {
+                continue;
+            }
+
+            $account_id = (string) ($bank_account['id'] ?? '');
+
+            if (!$account_id) {
+                continue;
+            }
+
+            $available_bank_accounts[$account_id] = true;
+        }
+
+        if (empty($available_bank_accounts)) {
+            WC_Admin_Settings::add_error(
+                __('Integration Alegra Woocommerce: No se encontraron cuentas bancarias activas en Alegra para guardar el mapeo de pagos.', 'integration-alegra-woo')
+            );
+            return $existing_value;
+        }
+
+        $has_errors = false;
+        $validated_mapping = [];
+
+        foreach ($active_gateways as $gateway_id => $gateway_title) {
+            $gateway_map = $sanitized_mapping[$gateway_id] ?? [
+                'payment_method' => '',
+                'account_id' => '',
+            ];
+
+            if (!$gateway_map['payment_method'] || !$gateway_map['account_id']) {
+                WC_Admin_Settings::add_error(
+                    sprintf(
+                        __('Integration Alegra Woocommerce: Debe configurar método de pago y cuenta bancaria para el gateway activo "%s".', 'integration-alegra-woo'),
+                        $gateway_title
+                    )
+                );
+                $has_errors = true;
+            }
+        }
+
+        foreach ($sanitized_mapping as $gateway_id => $gateway_map) {
+            $payment_method = $gateway_map['payment_method'];
+            $account_id = $gateway_map['account_id'];
+
+            if (($payment_method && !$account_id) || (!$payment_method && $account_id)) {
+                WC_Admin_Settings::add_error(
+                    sprintf(
+                        __('Integration Alegra Woocommerce: El gateway "%s" tiene configuración incompleta. Debe seleccionar método y cuenta.', 'integration-alegra-woo'),
+                        $gateway_id
+                    )
+                );
+                $has_errors = true;
+                continue;
+            }
+
+            if (!$payment_method && !$account_id) {
+                continue;
+            }
+
+            if (!isset(Integration_Alegra_WC::PAYMENTS_METHODS[$payment_method])) {
+                WC_Admin_Settings::add_error(
+                    sprintf(
+                        __('Integration Alegra Woocommerce: El método de pago "%s" no es válido para el gateway "%s".', 'integration-alegra-woo'),
+                        $payment_method,
+                        $gateway_id
+                    )
+                );
+                $has_errors = true;
+                continue;
+            }
+
+            if (!isset($available_bank_accounts[$account_id])) {
+                WC_Admin_Settings::add_error(
+                    sprintf(
+                        __('Integration Alegra Woocommerce: La cuenta bancaria "%s" no es válida para el gateway "%s".', 'integration-alegra-woo'),
+                        $account_id,
+                        $gateway_id
+                    )
+                );
+                $has_errors = true;
+                continue;
+            }
+
+            $validated_mapping[$gateway_id] = [
+                'payment_method' => $payment_method,
+                'account_id' => $account_id,
+            ];
+        }
+
+        if ($has_errors) {
+            return $existing_value;
+        }
+
+        return $validated_mapping;
+    }
+
+    private function sanitize_payment_gateways_mapping_input($value): array
+    {
+        $sanitized = [];
+
+        if (!is_array($value)) {
+            return $sanitized;
+        }
+
+        foreach ($value as $gateway_id => $gateway_map) {
+            if (!is_array($gateway_map)) {
+                continue;
+            }
+
+            $sanitized_gateway_id = sanitize_text_field((string) $gateway_id);
+
+            if (!$sanitized_gateway_id) {
+                continue;
+            }
+
+            $sanitized[$sanitized_gateway_id] = [
+                'payment_method' => sanitize_text_field((string) ($gateway_map['payment_method'] ?? '')),
+                'account_id' => sanitize_text_field((string) ($gateway_map['account_id'] ?? '')),
+            ];
+        }
+
+        return $sanitized;
+    }
+
+    private function get_payment_mapping_rows(array $active_gateways, array $all_gateways, array $saved_mappings): array
+    {
+        $rows = [];
+
+        foreach ($active_gateways as $gateway_id => $gateway_title) {
+            $rows[$gateway_id] = [
+                'label' => $gateway_title,
+                'active' => true,
+            ];
+        }
+
+        foreach ($saved_mappings as $gateway_id => $mapping) {
+            if (isset($rows[$gateway_id])) {
+                continue;
+            }
+
+            $rows[$gateway_id] = [
+                'label' => $all_gateways[$gateway_id] ?? $gateway_id,
+                'active' => false,
+            ];
+        }
+
+        return $rows;
+    }
 }

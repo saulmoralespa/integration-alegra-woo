@@ -2,12 +2,12 @@
 /**
  * Plugin Name: Integration Alegra Woocommerce
  * Description: Integración del sistema contable y de facturación Alegra para Woocommerce
- * Version: 0.0.15
+ * Version: 0.1.0
  * Author: Saúl Morales Pacheco
  * Author URI: https://saulmoralespa.com
  * License: GNU General Public License v3.0
  * License URI: http://www.gnu.org/licenses/gpl-3.0.html
- * WC tested up to: 10.3
+ * WC tested up to: 10.7
  * WC requires at least: 9.6
  * Requires at least: 6.0
  * Tested up to: 6.9
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if(!defined('INTEGRATION_ALEGRA_WC_SMP_VERSION')){
-    define('INTEGRATION_ALEGRA_WC_SMP_VERSION', '0.0.15');
+    define('INTEGRATION_ALEGRA_WC_SMP_VERSION', '0.1.0');
 }
 
 add_action( 'plugins_loaded', 'integration_alegra_wc_smp_init');

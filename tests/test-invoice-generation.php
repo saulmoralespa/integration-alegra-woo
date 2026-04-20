@@ -235,5 +235,129 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
             'Los productos sin SKU deberían ser omitidos en la generación de factura'
         );
     }
+
+    /**
+     * Test 7: Verificar resolución de mapeo para gateway con configuración válida
+     */
+    public function test_resolve_gateway_payment_mapping_returns_mapping_when_exists() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'resolve_gateway_payment_mapping' );
+        $method->setAccessible( true );
+
+        $mappings = [
+            'cod' => [
+                'payment_method' => 'cash',
+                'account_id' => '1',
+            ],
+            'bacs' => [
+                'payment_method' => 'transfer',
+                'account_id' => '3',
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ 'bacs', $mappings, [ 'cod', 'bacs' ] ] );
+
+        $this->assertIsArray( $result );
+        $this->assertSame( 'transfer', $result['payment_method'] );
+        $this->assertSame( '3', $result['account_id'] );
+    }
+
+    /**
+     * Test 8: Verificar fallback cuando gateway activo no tiene mapeo
+     */
+    public function test_resolve_gateway_payment_mapping_returns_null_for_unmapped_active_gateway() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'resolve_gateway_payment_mapping' );
+        $method->setAccessible( true );
+
+        $result = $method->invokeArgs( null, [ 'cod', [], [ 'cod', 'bacs' ] ] );
+
+        $this->assertNull( $result );
+    }
+
+    /**
+     * Test 9: Verificar bloqueo cuando gateway inactivo no tiene mapeo
+     */
+    public function test_resolve_gateway_payment_mapping_throws_for_unmapped_inactive_gateway() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'resolve_gateway_payment_mapping' );
+        $method->setAccessible( true );
+
+        $this->expectException( Exception::class );
+        $this->expectExceptionMessage( 'no tiene mapeo' );
+
+        $method->invokeArgs( null, [ 'legacy_gateway', [], [ 'cod', 'bacs' ] ] );
+    }
+
+    /**
+     * Test 10: Verificar construcción del bloque payments con fecha de creación del pedido
+     */
+    public function test_build_invoice_payments_data_uses_order_creation_date() {
+        $order = $this->create_test_order();
+        $order->set_payment_method( 'bacs' );
+        $order->set_total( 100000 );
+        $order->set_currency( 'COP' );
+        $order->save();
+
+        $mapping = [
+            'payment_method' => 'transfer',
+            'account_id' => '3',
+        ];
+
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'build_invoice_payments_data' );
+        $method->setAccessible( true );
+
+        $result = $method->invokeArgs( null, [ $order, $mapping ] );
+
+        $this->assertIsArray( $result );
+        $this->assertSame(
+            wc_format_datetime( $order->get_date_created(), 'y-m-d' ),
+            $result['date'],
+            'La fecha del pago debe usar la fecha de creación del pedido'
+        );
+        $this->assertSame( 3, $result['account']['id'] );
+        $this->assertSame( 'transfer', $result['paymentMethod'] );
+        $this->assertSame( 100000, $result['amount'] );
+        $this->assertSame( 'COP', $result['currency']['code'] );
+    }
+
+    /**
+     * Test 11: Verificar normalización de mapeos de gateways
+     */
+    public function test_normalize_payment_gateways_mapping_sanitizes_invalid_rows() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'cod' => [
+                'payment_method' => 'cash',
+                'account_id' => '1',
+            ],
+            'invalid' => [
+                'payment_method' => '',
+                'account_id' => '4',
+            ],
+            'bacs' => [
+                'payment_method' => 'transfer',
+                'account_id' => '',
+            ],
+            'legacy' => 'unexpected',
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertSame(
+            [
+                'cod' => [
+                    'payment_method' => 'cash',
+                    'account_id' => '1',
+                ],
+            ],
+            $result,
+            'Solo deben persistirse filas con método y cuenta completos.'
+        );
+    }
 }
 

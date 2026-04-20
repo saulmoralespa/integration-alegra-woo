@@ -19,6 +19,15 @@ class Integration_Alegra_WC
 
     const SKU_SHIPPING = 'S-P-W';
 
+    const PAYMENTS_METHODS = [
+        "cash" => "Efectivo",
+        "check" => "Cheque",
+        "transfer" => "Transferencia bancaria",
+        "deposit" => "Depósito bancario",
+        "credit-card" => "Tarjeta de crédito",
+        "debit-card" => "Tarjeta de débito",
+    ];
+
     public static function test_auth($user, $token): bool
     {
         try{
@@ -33,17 +42,21 @@ class Integration_Alegra_WC
 
     public static function get_instance(): ?Client
     {
-        if(isset(self::$integration_settings) && isset(self::$alegra)) return self::$alegra;
+        $settings = get_option( 'woocommerce_wc_alegra_integration_settings', [] );
 
-        $settings = get_option('woocommerce_wc_alegra_integration_settings');
+        if ( ! is_array( $settings ) ) {
+            $settings = [];
+        }
 
-        self::$integration_settings = (object)$settings;
+        self::$integration_settings = (object) $settings;
 
-        if(self::$integration_settings->enabled === 'no') return null;
+        if ( ( self::$integration_settings->enabled ?? 'no' ) === 'no' ) {
+            return null;
+        }
 
-        if(self::$integration_settings->user &&
-            self::$integration_settings->token){
-            self::$alegra = new Client(self::$integration_settings->user, self::$integration_settings->token);
+        if ( ! empty( self::$integration_settings->user ) &&
+            ! empty( self::$integration_settings->token ) ) {
+            self::$alegra = new Client( self::$integration_settings->user, self::$integration_settings->token );
         }
 
         return self::$alegra;
@@ -98,6 +111,61 @@ class Integration_Alegra_WC
         }
 
         return $taxes;
+    }
+
+    public static function get_bank_accounts(): array
+    {
+        $bank_accounts = [];
+
+        if ( ! self::get_instance() ) {
+            return $bank_accounts;
+        }
+
+        try {
+            $query = [
+                'status' => 'active',
+            ];
+            $bank_accounts = self::get_instance()->getBankAccounts( $query );
+        } catch ( Exception $exception ) {
+            integration_alegra_wc_smp()->log( $exception->getMessage() );
+        }
+
+        return $bank_accounts;
+    }
+
+    public static function get_wc_payment_gateways( bool $only_active = false ): array
+    {
+        $gateways = [];
+
+        if ( ! function_exists( 'WC' ) || ! WC() || ! WC()->payment_gateways() ) {
+            return $gateways;
+        }
+
+        $payment_gateways = WC()->payment_gateways()->payment_gateways();
+
+        if ( ! is_array( $payment_gateways ) ) {
+            return $gateways;
+        }
+
+        foreach ( $payment_gateways as $gateway ) {
+            $gateway_id = $gateway->id ?? '';
+
+            if ( ! $gateway_id ) {
+                continue;
+            }
+
+            $is_active = isset( $gateway->enabled ) && 'yes' === $gateway->enabled;
+
+            if ( $only_active && ! $is_active ) {
+                continue;
+            }
+
+            $gateway_title = method_exists( $gateway, 'get_title' ) ? $gateway->get_title() : ( $gateway->title ?? $gateway_id );
+
+            $gateways[ $gateway_id ] = $gateway_title ?: $gateway_id;
+        }
+
+        return $gateways;
     }
 
     public static function sync_products(array $ids): void
@@ -223,17 +291,6 @@ class Integration_Alegra_WC
                 /*"healthSector" => [
 
                 ],*/
-                /*"payments" => [
-                    "date" => $order->get_date_paid(),
-                    "account" => [
-                      "id" => 3
-                    ],
-                    "amount" => (int)$order->get_total(),
-                    "paymentMethod" => "credit-card",
-                    "currency" => [
-                        "code" => $order->get_currency()
-                    ]
-                ]*/
             ];
 
             if(!self::$integration_settings->seller_generate_invoice){
@@ -248,6 +305,25 @@ class Integration_Alegra_WC
 
             if ( ! empty( self::$integration_settings->cost_center_generate_invoice ) ) {
                 $data_invoice['costCenter'] = self::$integration_settings->cost_center_generate_invoice;
+            }
+
+            $payment_mapping = self::resolve_gateway_payment_mapping(
+                (string) $order->get_payment_method(),
+                self::get_payment_gateways_mapping(),
+                self::get_active_wc_payment_gateway_ids()
+            );
+
+            if ( $payment_mapping ) {
+                $data_invoice['payments'] = self::build_invoice_payments_data( $order, $payment_mapping );
+            } else {
+                integration_alegra_wc_smp()->log(
+                    sprintf(
+                        'No se encontró mapeo de pago para el pedido %d (gateway: %s). Se enviará la factura sin bloque payments.',
+                        $order_id,
+                        (string) $order->get_payment_method() ?: 'N/A'
+                    ),
+                    'warning'
+                );
             }
 
             if(self::$integration_settings->debug === 'yes') {
@@ -358,6 +434,99 @@ class Integration_Alegra_WC
         }
 
         return $dv_nit;
+    }
+
+    private static function get_payment_gateways_mapping(): array
+    {
+        if ( ! isset( self::$integration_settings ) ) {
+            $settings = get_option( 'woocommerce_wc_alegra_integration_settings', [] );
+            self::$integration_settings = (object) ( is_array( $settings ) ? $settings : [] );
+        }
+
+        $raw_mapping = self::$integration_settings->payment_gateways_mapping ?? [];
+
+        return self::normalize_payment_gateways_mapping( $raw_mapping );
+    }
+
+    private static function get_active_wc_payment_gateway_ids(): array
+    {
+        return array_keys( self::get_wc_payment_gateways( true ) );
+    }
+
+    private static function normalize_payment_gateways_mapping( $raw_mapping ): array
+    {
+        $normalized_mapping = [];
+
+        if ( ! is_array( $raw_mapping ) ) {
+            return $normalized_mapping;
+        }
+
+        foreach ( $raw_mapping as $gateway_id => $mapping ) {
+            if ( ! is_array( $mapping ) ) {
+                continue;
+            }
+
+            $sanitized_gateway_id = sanitize_text_field( (string) $gateway_id );
+            $payment_method = sanitize_text_field( (string) ( $mapping['payment_method'] ?? '' ) );
+            $account_id = sanitize_text_field( (string) ( $mapping['account_id'] ?? '' ) );
+
+            if ( ! $sanitized_gateway_id || ! $payment_method || ! $account_id ) {
+                continue;
+            }
+
+            $normalized_mapping[ $sanitized_gateway_id ] = [
+                'payment_method' => $payment_method,
+                'account_id' => $account_id,
+            ];
+        }
+
+        return $normalized_mapping;
+    }
+
+    private static function resolve_gateway_payment_mapping(string $gateway_id, array $payment_mappings, array $active_gateway_ids): ?array
+    {
+        $sanitized_gateway_id = trim( $gateway_id );
+
+        if ( '' === $sanitized_gateway_id ) {
+            return null;
+        }
+
+        if ( isset( $payment_mappings[ $sanitized_gateway_id ] ) ) {
+            return $payment_mappings[ $sanitized_gateway_id ];
+        }
+
+        if ( ! in_array( $sanitized_gateway_id, $active_gateway_ids, true ) ) {
+            throw new Exception(
+                sprintf(
+                    'Integration Alegra Woocommerce: El método de pago "%s" no tiene mapeo en Alegra. Configure el mapeo en la sección Métodos de pago.',
+                    $sanitized_gateway_id
+                )
+            );
+        }
+
+        return null;
+    }
+
+    private static function build_invoice_payments_data( WC_Order $order, array $payment_mapping ): array
+    {
+        $order_created_at = $order->get_date_created();
+        $payment_date = $order_created_at
+            ? wc_format_datetime( $order_created_at, 'Y-m-d' )
+            : wp_date( 'Y-m-d' );
+
+        return [
+            [
+                'date' => $payment_date,
+                'amount' => (float) $order->get_total(),
+                'paymentMethod' => $payment_mapping['payment_method'],
+                'account' => [
+                    'id' => $payment_mapping['account_id'],
+                ],
+                'currency' => [
+                    'code' => $order->get_currency(),
+                ],
+            ],
+        ];
     }
 
     /**

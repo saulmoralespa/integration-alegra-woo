@@ -18,6 +18,21 @@ $taxes = $this->get_data_options('Integration_Alegra_WC::get_taxes', function($n
     return $new_tax;
 });
 
+$bank_accounts = $this->get_data_options('Integration_Alegra_WC::get_bank_accounts', function($new_account, $account){
+    if(($account["status"] ?? '') !== 'active') return $new_account;
+    $account_id = (string) ($account["id"] ?? '');
+    if(!$account_id) return $new_account;
+
+    $account_name = $account["name"] ?? $account_id;
+    $account_number = !empty($account["number"]) ? " ({$account["number"]})" : '';
+    $new_account[$account_id] = "{$account_name}{$account_number}";
+
+    return $new_account;
+});
+
+$active_gateways = Integration_Alegra_WC::get_wc_payment_gateways(true);
+$all_gateways = Integration_Alegra_WC::get_wc_payment_gateways();
+
 return [
     'invoice'  => array(
         'title' => __( 'Facturas de ventas' ),
@@ -56,6 +71,21 @@ return [
         'options'  => $cost_centers,
         'default' => '',
         'description' => __( 'Centro de costo asociado a la factura' ),
+        'desc_tip' => false
+    ),
+    'payment_methods'  => array(
+        'title' => __( 'Métodos de pago' ),
+        'type'  => 'title',
+        'description' => __( 'Relacione cada método de pago activo de WooCommerce con el método de pago y la cuenta bancaria de Alegra.' )
+    ),
+    'payment_gateways_mapping' => array(
+        'title' => __( 'Mapeo de métodos de pago' ),
+        'type' => 'payment_mappings_table',
+        'payment_methods' => Integration_Alegra_WC::PAYMENTS_METHODS,
+        'bank_accounts' => $bank_accounts,
+        'active_gateways' => $active_gateways,
+        'all_gateways' => $all_gateways,
+        'description' => __( 'Debe configurar método de pago y cuenta bancaria para cada gateway activo. Los gateways inactivos con mapeo guardado también se muestran para edición.' ),
         'desc_tip' => false
     ),
     'client'  => array(
