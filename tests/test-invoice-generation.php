@@ -311,15 +311,19 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
         $result = $method->invokeArgs( null, [ $order, $mapping ] );
 
         $this->assertIsArray( $result );
+        $this->assertNotEmpty( $result );
+
+        $payment = $result[0];
+
         $this->assertSame(
-            wc_format_datetime( $order->get_date_created(), 'y-m-d' ),
-            $result['date'],
+            wc_format_datetime( $order->get_date_created(), 'Y-m-d' ),
+            $payment['date'],
             'La fecha del pago debe usar la fecha de creación del pedido'
         );
-        $this->assertSame( 3, $result['account']['id'] );
-        $this->assertSame( 'transfer', $result['paymentMethod'] );
-        $this->assertSame( 100000, $result['amount'] );
-        $this->assertSame( 'COP', $result['currency']['code'] );
+        $this->assertSame( '3', $payment['account']['id'] );
+        $this->assertSame( 'transfer', $payment['paymentMethod'] );
+        $this->assertSame( 100000.0, $payment['amount'] );
+        $this->assertSame( 'COP', $payment['currency']['code'] );
     }
 
     /**
