@@ -20,12 +20,114 @@ class Integration_Alegra_WC
     const SKU_SHIPPING = 'S-P-W';
 
     const PAYMENTS_METHODS = [
-        "cash" => "Efectivo",
-        "check" => "Cheque",
-        "transfer" => "Transferencia bancaria",
-        "deposit" => "Depósito bancario",
-        "credit-card" => "Tarjeta de crédito",
-        "debit-card" => "Tarjeta de débito",
+        'INSTRUMENT_NOT_DEFINED'                     => 'Instrumento no definido',
+        'CASH'                                       => 'Efectivo',
+        'DEBIT_TRANSFER'                             => 'Débito ACH',
+        'BANK_DEPOSIT'                               => 'Consignación bancaria',
+        'ACH_CREDIT'                                 => 'Crédito ACH',
+        'ACH_DEBIT'                                  => 'Débito ACH',
+        'REVERSION_ACH_DEBIT'                        => 'Reversión débito de demanda ACH',
+        'REVERSION_ACH_CREDIT'                       => 'Reversión crédito de demanda ACH',
+        'CREDIT_ACH_DEMAND'                          => 'Crédito de demanda ACH',
+        'DEBIT_ACH_DEMAND'                           => 'Débito de demanda ACH',
+        'NATIONAL_CLEARING'                          => 'Clearing nacional o regional',
+        'REVERSION_CREDIT_SAVING'                    => 'Reversión crédito ahorro',
+        'REVERSION_DEBIT_SAVING'                     => 'Reversión débito ahorro',
+        'CREDIT_SAVING'                              => 'Crédito ahorro',
+        'DEBIT_SAVING'                               => 'Débito ahorro',
+        'BOOKENTRY_CREDIT'                           => 'Bookentry crédito',
+        'BOOKENTRY_DEBIT'                            => 'Bookentry débito',
+        'CTP_CREDIT'                                 => 'Crédito pago negocio corporativo (CTP)',
+        'CHECK'                                      => 'Cheque',
+        'BANK_PROYECT'                               => 'Proyecto bancario',
+        'BANK_PROYECT_CERTIFIED'                     => 'Proyecto bancario certificado',
+        'EXCHANGE_RATE_PENDING_ACEPT'                => 'Nota cambiaria esperando aceptación',
+        'CERTIFIED_CHECK'                            => 'Cheque certificado',
+        'LOCAL_CHECK'                                => 'Cheque local',
+        'CTP_DEBIT'                                  => 'Débito Pago Negocio Corporativo (CTP)',
+        'CTX_CREDIT'                                 => 'Crédito Negocio Intercambio Corporativo (CTX)',
+        'CTX_DEBIT'                                  => 'Débito Negocio Intercambio Corporativo (CTX)',
+        'CREDIT_TRANSFER'                            => 'Transferecia crédito',
+        'PPD_PAY'                                    => 'Pago y depósito pre acordado (PPD)',
+        'CTP_CREDIT_SAVING'                          => 'Pago negocio corporativo ahorros crédito (CTP)',
+        'CTP_DEBIT_SAVING'                           => 'Pago negocio corporativo ahorros débito (CTP)',
+        'EXCHANGE_RATE'                              => 'Nota cambiaria',
+        'CREDIT_TRANSFER_BANK'                       => 'Transferencia crédito bancario',
+        'DEBIT_TRANSFER_INTERBANK'                   => 'Transferencia débito interbancario',
+        'DEBIT_TRANSFER_BANK'                        => 'Transferencia débito bancaria',
+        'CREDIT_CARD'                                => 'Tarjeta crédito',
+        'DEBIT_CARD'                                 => 'Tarjeta débito',
+        'POSTTURN'                                   => 'Postgiro',
+        'URGENT_BUSINESS_PAYMENT'                    => 'Pago comercial urgente',
+        'URGENT_CASH_PAYMENT'                        => 'Pago tesorería urgente',
+        'PROMISING_NOTE'                             => 'Nota promisoria',
+        'PROMISING_NOTE_SIGNED_PROVIDER'             => 'Nota promisoria firmada por el acreedor',
+        'PROMISING_NOTE_SIGNED_PROVIDER_BANK'        => 'Nota promisoria firmada por el acreedor, avalada por el banco',
+        'PROMISING_NOTE_SIGNED_PROVIDER_THIRD'       => 'Nota promisoria firmada por el acreedor, avalada por un tercero',
+        'PROMISING_NOTE_SIGNED_BANK'                 => 'Nota promisoria firmada por el bancos',
+        'PROMISING_NOTE_SIGNED_BANK_ENDORSED_BANK'   => 'Nota promisoria firmada por un banco avalada por otro banco',
+        'PROMISING_NOTE_SIGNED'                      => 'Nota promisoria firmada',
+        'PROMISING_NOTE_SIGNED_THIRD'                => 'Nota promisoria firmada por un tercero avalada por un banco',
+        'WITHDRAWAL_NOTE_CREDITOR'                   => 'Retiro de nota por el acreedor',
+        'BONDS'                                      => 'Bonos',
+        'VOUCHERS'                                   => 'Vales',
+        'WITHDRAWAL_NOTE_CREDITOR_BANK'              => 'Retiro de nota por el acreedor sobre un banco',
+        'WITHDRAWAL_NOTE_CREDITOR_ENDORSED_BANK'     => 'Retiro de nota por el acreedor, avalada por otro banco',
+        'WITHDRAWAL_NOTE_CREDITOR_BANK_ENDORSED_THIRD' => 'Retiro de nota por el acreedor, sobre un banco avalada por un tercero',
+        'WITHDRAWAL_NOTE_CREDITOR_ENDORSED_THIRD'    => 'Retiro de una nota por el acreedor sobre un tercero',
+        'WITHDRAWAL_NOTE_CREDITOR_THIRD_PARTY'       => 'Retiro de una nota por el acreedor sobre un tercero avalada por un banco',
+        'TRANSFERABLE_BANK_NOTE'                     => 'Nota bancaria transferible',
+        'TRANSFERABLE_LOCAL_CHECK'                   => 'Cheque local transferible',
+        'REFERENCED_TURN'                            => 'Giro referenciado',
+        'URGENT_TURN'                                => 'Giro urgente',
+        'OPEN_FORMAT_TWIST'                          => 'Giro formato abierto',
+        'PAYMENT_METHOD_REQUESTED_NOT_USED'          => 'Método de pago solicitado no usado',
+        'CLEARING_PARTNERS'                          => 'Clearing entre partners',
+        'CCD_CREDIT'                                 => 'Desembolso Crédito (CCD)s',
+        'CCD_DEBIT'                                  => 'Desembolso (CCD) débito',
+        'BANK_CHECK'                                 => 'Cheque bancario de gerencia',
+        'CDD_CREDIT'                                 => 'Desembolso Crédito plus (CCD+)s',
+        'CDD_CASH'                                   => 'Desembolso Débito plus (CCD+)',
+        'CCD_CASH_CREDIT'                            => 'Desembolso Crédito (CCD)',
+        'CCD_CASH_DEBIT'                             => 'Desembolso Débito (CCD)',
+        'CTX_CREDIT_DEAL'                            => 'Crédito Intercambio Corporativo (CTX)',
+        'CTX_DEBIT_DEAL'                             => 'Débito Intercambio Corporativo (CTX)',
+        'CCD_CREDIT_PLUS'                            => 'Desembolso Crédito plus (CCD+)',
+        'CCD_DEBIT_PLUS'                             => 'Desembolso Débito plus (CCD+)',
+        'FRENCH_BANKING_STANDARD_TELEX'              => 'Telex estándar bancario',
+        'MUTUAL_AGREEMENT'                           => 'Otro',
+    ];
+
+    const PAYMENT_TYPE_CASH   = 'CASH';
+    const PAYMENT_TYPE_CREDIT = 'CREDIT';
+
+    /** UBL payment methods that map to CREDIT paymentForm; all others default to CASH. */
+    const CREDIT_PAYMENT_METHODS = [ 'CREDIT_CARD', 'DEBIT_CARD' ];
+
+    /**
+     * The six UBL payment method options shown in the admin settings UI.
+     * Keys are UBL codes stored directly; values are the Spanish labels displayed.
+     */
+    const PAYMENT_METHODS_UI = [
+        'CASH'                 => 'Efectivo',
+        'CHECK'                => 'Cheque',
+        'CREDIT_TRANSFER_BANK' => 'Transferencia bancaria',
+        'BANK_DEPOSIT'         => 'Depósito bancario',
+        'CREDIT_CARD'          => 'Tarjeta de crédito',
+        'DEBIT_CARD'           => 'Tarjeta de débito',
+    ];
+
+    /**
+     * Maps UBL payment method codes to legacy values required by the Alegra API
+     * for the payments[].paymentMethod child field.
+     */
+    const UBL_TO_LEGACY_PAYMENT_METHOD = [
+        'CASH'                 => 'cash',
+        'CHECK'                => 'check',
+        'CREDIT_TRANSFER_BANK' => 'transfer',
+        'BANK_DEPOSIT'         => 'deposit',
+        'CREDIT_CARD'          => 'credit-card',
+        'DEBIT_CARD'           => 'debit-card',
     ];
 
     public static function test_auth($user, $token): bool
@@ -284,7 +386,7 @@ class Integration_Alegra_WC
                     "id" => $client_id
                 ],
                 "items" => $items_invoice,
-                "paymentMethod" => "CASH", //or CREDIT
+                "paymentMethod" => "CASH",
                 "paymentForm" =>  "CASH", //or CREDIT
                 "type" => "NATIONAL", //EXPORT
                 "purchaseOrderNumber" => (string)$order_id,
@@ -314,11 +416,13 @@ class Integration_Alegra_WC
             );
 
             if ( $payment_mapping ) {
-                $data_invoice['payments'] = self::build_invoice_payments_data( $order, $payment_mapping );
+                $data_invoice['paymentForm']   = $payment_mapping['payment_type']   ?? self::PAYMENT_TYPE_CASH;
+                $data_invoice['paymentMethod'] = $payment_mapping['payment_method'] ?? self::PAYMENT_TYPE_CASH;
+                $data_invoice['payments']      = self::build_invoice_payments_data( $order, $payment_mapping );
             } else {
                 integration_alegra_wc_smp()->log(
                     sprintf(
-                        'No se encontró mapeo de pago para el pedido %d (gateway: %s). Se enviará la factura sin bloque payments.',
+                        'No se encontró mapeo de pago para el pedido %d (gateway: %s). Se usará CASH como tipo de pago.',
                         $order_id,
                         (string) $order->get_payment_method() ?: 'N/A'
                     ),
@@ -453,6 +557,30 @@ class Integration_Alegra_WC
         return array_keys( self::get_wc_payment_gateways( true ) );
     }
 
+    private static function get_payment_type_from_method( string $payment_method ): string
+    {
+        return in_array( $payment_method, self::CREDIT_PAYMENT_METHODS, true )
+            ? self::PAYMENT_TYPE_CREDIT
+            : self::PAYMENT_TYPE_CASH;
+    }
+
+    private static function get_legacy_child_payment_method( string $ubl_method ): string
+    {
+        if ( isset( self::UBL_TO_LEGACY_PAYMENT_METHOD[ $ubl_method ] ) ) {
+            return self::UBL_TO_LEGACY_PAYMENT_METHOD[ $ubl_method ];
+        }
+
+        integration_alegra_wc_smp()->log(
+            sprintf(
+                'Integration Alegra Woocommerce: El método de pago UBL "%s" no tiene equivalente legacy para payments[].paymentMethod. Se usará "cash" como fallback.',
+                $ubl_method
+            ),
+            'warning'
+        );
+
+        return 'cash';
+    }
+
     private static function normalize_payment_gateways_mapping( $raw_mapping ): array
     {
         $normalized_mapping = [];
@@ -461,22 +589,35 @@ class Integration_Alegra_WC
             return $normalized_mapping;
         }
 
+        $valid_payment_types = [ self::PAYMENT_TYPE_CASH, self::PAYMENT_TYPE_CREDIT ];
+
         foreach ( $raw_mapping as $gateway_id => $mapping ) {
             if ( ! is_array( $mapping ) ) {
                 continue;
             }
 
             $sanitized_gateway_id = sanitize_text_field( (string) $gateway_id );
-            $payment_method = sanitize_text_field( (string) ( $mapping['payment_method'] ?? '' ) );
-            $account_id = sanitize_text_field( (string) ( $mapping['account_id'] ?? '' ) );
+            $payment_method       = sanitize_text_field( (string) ( $mapping['payment_method'] ?? '' ) );
+            $account_id           = sanitize_text_field( (string) ( $mapping['account_id'] ?? '' ) );
 
             if ( ! $sanitized_gateway_id || ! $payment_method || ! $account_id ) {
                 continue;
             }
 
+            // Reject any payment_method not present in the UBL catalog.
+            if ( ! isset( self::PAYMENTS_METHODS[ $payment_method ] ) ) {
+                continue;
+            }
+
+            $raw_payment_type = sanitize_text_field( (string) ( $mapping['payment_type'] ?? '' ) );
+            $payment_type = in_array( $raw_payment_type, $valid_payment_types, true )
+                ? $raw_payment_type
+                : self::get_payment_type_from_method( $payment_method );
+
             $normalized_mapping[ $sanitized_gateway_id ] = [
                 'payment_method' => $payment_method,
-                'account_id' => $account_id,
+                'account_id'     => $account_id,
+                'payment_type'   => $payment_type,
             ];
         }
 
@@ -490,7 +631,7 @@ class Integration_Alegra_WC
         if ( '' === $sanitized_gateway_id ) {
             return null;
         }
-
+        
         if ( isset( $payment_mappings[ $sanitized_gateway_id ] ) ) {
             return $payment_mappings[ $sanitized_gateway_id ];
         }
@@ -518,7 +659,7 @@ class Integration_Alegra_WC
             [
                 'date' => $payment_date,
                 'amount' => (float) $order->get_total(),
-                'paymentMethod' => $payment_mapping['payment_method'],
+                'paymentMethod' => self::get_legacy_child_payment_method( $payment_mapping['payment_method'] ),
                 'account' => [
                     'id' => $payment_mapping['account_id'],
                 ],

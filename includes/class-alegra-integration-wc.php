@@ -123,6 +123,7 @@ class WC_Alegra_Integration extends WC_Integration
             'bank_accounts' => [],
             'active_gateways' => [],
             'all_gateways' => [],
+            'payment_types' => [ Integration_Alegra_WC::PAYMENT_TYPE_CASH => Integration_Alegra_WC::PAYMENT_TYPE_CASH, Integration_Alegra_WC::PAYMENT_TYPE_CREDIT => Integration_Alegra_WC::PAYMENT_TYPE_CREDIT ],
         ];
 
         $data = wp_parse_args($data, $defaults);
@@ -144,15 +145,18 @@ class WC_Alegra_Integration extends WC_Integration
                         <thead>
                             <tr>
                                 <th><?php echo esc_html__('Gateway WooCommerce', 'integration-alegra-woo'); ?></th>
-                                <th><?php echo esc_html__('Método de pago en Alegra', 'integration-alegra-woo'); ?></th>
+                                <th><?php echo esc_html__('Tipo de pago', 'integration-alegra-woo'); ?></th>
                                 <th><?php echo esc_html__('Cuenta bancaria en Alegra', 'integration-alegra-woo'); ?></th>
+                                <th><?php echo esc_html__('Forma de pago', 'integration-alegra-woo'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php foreach ($rows as $gateway_id => $gateway_data): ?>
                             <?php
-                            $saved_method = $saved_mappings[$gateway_id]['payment_method'] ?? '';
+                            $saved_ubl_method = $saved_mappings[$gateway_id]['payment_method'] ?? '';
+                            $saved_method  = $saved_ubl_method;
                             $saved_account = $saved_mappings[$gateway_id]['account_id'] ?? '';
+                            $saved_type    = $saved_mappings[$gateway_id]['payment_type'] ?? '';
                             $gateway_label = $gateway_data['label'];
                             if (!$gateway_data['active']) {
                                 $gateway_label .= ' (' . __('inactivo', 'integration-alegra-woo') . ')';
@@ -180,6 +184,16 @@ class WC_Alegra_Integration extends WC_Integration
                                         <?php foreach ($data['bank_accounts'] as $account_id => $account_label): ?>
                                             <option value="<?php echo esc_attr($account_id); ?>" <?php selected($saved_account, (string) $account_id); ?>>
                                                 <?php echo esc_html($account_label); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="<?php echo esc_attr(sprintf('%s[%s][payment_type]', $field_key, $gateway_id)); ?>">
+                                        <option value=""><?php echo esc_html__('Seleccionar tipo...', 'integration-alegra-woo'); ?></option>
+                                        <?php foreach ($data['payment_types'] as $type_key => $type_label): ?>
+                                            <option value="<?php echo esc_attr($type_key); ?>" <?php selected($saved_type, $type_key); ?>>
+                                                <?php echo esc_html($type_label); ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -241,12 +255,13 @@ class WC_Alegra_Integration extends WC_Integration
             $gateway_map = $sanitized_mapping[$gateway_id] ?? [
                 'payment_method' => '',
                 'account_id' => '',
+                'payment_type' => '',
             ];
 
-            if (!$gateway_map['payment_method'] || !$gateway_map['account_id']) {
+            if (!$gateway_map['payment_method'] || !$gateway_map['account_id'] || !$gateway_map['payment_type']) {
                 WC_Admin_Settings::add_error(
                     sprintf(
-                        __('Integration Alegra Woocommerce: Debe configurar método de pago y cuenta bancaria para el gateway activo "%s".', 'integration-alegra-woo'),
+                        __('Integration Alegra Woocommerce: Debe configurar método de pago, cuenta bancaria y tipo de pago para el gateway activo "%s".', 'integration-alegra-woo'),
                         $gateway_title
                     )
                 );
@@ -273,7 +288,10 @@ class WC_Alegra_Integration extends WC_Integration
                 continue;
             }
 
-            if (!isset(Integration_Alegra_WC::PAYMENTS_METHODS[$payment_method])) {
+            // Accept only UBL catalog codes.
+            $is_ubl    = isset( Integration_Alegra_WC::PAYMENTS_METHODS[ $payment_method ] );
+
+            if ( ! $is_ubl ) {
                 WC_Admin_Settings::add_error(
                     sprintf(
                         __('Integration Alegra Woocommerce: El método de pago "%s" no es válido para el gateway "%s".', 'integration-alegra-woo'),
@@ -297,9 +315,22 @@ class WC_Alegra_Integration extends WC_Integration
                 continue;
             }
 
+            $payment_type = $gateway_map['payment_type'] ?? '';
+            if (!in_array($payment_type, [ Integration_Alegra_WC::PAYMENT_TYPE_CASH, Integration_Alegra_WC::PAYMENT_TYPE_CREDIT ], true)) {
+                WC_Admin_Settings::add_error(
+                    sprintf(
+                        __('Integration Alegra Woocommerce: El tipo de pago para el gateway "%s" debe ser CASH o CREDIT.', 'integration-alegra-woo'),
+                        $gateway_id
+                    )
+                );
+                $has_errors = true;
+                continue;
+            }
+
             $validated_mapping[$gateway_id] = [
                 'payment_method' => $payment_method,
-                'account_id' => $account_id,
+                'account_id'     => $account_id,
+                'payment_type'   => $payment_type,
             ];
         }
 
@@ -318,6 +349,8 @@ class WC_Alegra_Integration extends WC_Integration
             return $sanitized;
         }
 
+        $valid_payment_types = [ Integration_Alegra_WC::PAYMENT_TYPE_CASH, Integration_Alegra_WC::PAYMENT_TYPE_CREDIT ];
+
         foreach ($value as $gateway_id => $gateway_map) {
             if (!is_array($gateway_map)) {
                 continue;
@@ -329,9 +362,12 @@ class WC_Alegra_Integration extends WC_Integration
                 continue;
             }
 
+            $raw_payment_type = sanitize_text_field((string) ($gateway_map['payment_type'] ?? ''));
+
             $sanitized[$sanitized_gateway_id] = [
                 'payment_method' => sanitize_text_field((string) ($gateway_map['payment_method'] ?? '')),
-                'account_id' => sanitize_text_field((string) ($gateway_map['account_id'] ?? '')),
+                'account_id'     => sanitize_text_field((string) ($gateway_map['account_id'] ?? '')),
+                'payment_type'   => in_array($raw_payment_type, $valid_payment_types, true) ? $raw_payment_type : '',
             ];
         }
 

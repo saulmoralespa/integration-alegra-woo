@@ -300,7 +300,7 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
         $order->save();
 
         $mapping = [
-            'payment_method' => 'transfer',
+            'payment_method' => 'CREDIT_TRANSFER_BANK', // UBL code (already normalized)
             'account_id' => '3',
         ];
 
@@ -321,9 +321,70 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
             'La fecha del pago debe usar la fecha de creación del pedido'
         );
         $this->assertSame( '3', $payment['account']['id'] );
-        $this->assertSame( 'transfer', $payment['paymentMethod'] );
+        $this->assertSame( 'transfer', $payment['paymentMethod'], 'El nodo hijo payments[].paymentMethod debe usar el valor legacy requerido por la API de Alegra' );
         $this->assertSame( 100000.0, $payment['amount'] );
         $this->assertSame( 'COP', $payment['currency']['code'] );
+    }
+
+    /**
+     * Test 20: Verificar que build_invoice_payments_data convierte códigos UBL a legacy para payments[].paymentMethod
+     */
+    public function test_build_invoice_payments_data_derives_legacy_child_from_ubl_codes() {
+        $order = $this->create_test_order();
+        $order->set_total( 50000 );
+        $order->set_currency( 'COP' );
+        $order->save();
+
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'build_invoice_payments_data' );
+        $method->setAccessible( true );
+
+        $ubl_to_legacy = [
+            'CASH'                 => 'cash',
+            'CHECK'                => 'check',
+            'CREDIT_TRANSFER_BANK' => 'transfer',
+            'BANK_DEPOSIT'         => 'deposit',
+            'CREDIT_CARD'          => 'credit-card',
+            'DEBIT_CARD'           => 'debit-card',
+        ];
+
+        foreach ( $ubl_to_legacy as $ubl_code => $expected_legacy ) {
+            $mapping = [ 'payment_method' => $ubl_code, 'account_id' => '1' ];
+            $result  = $method->invokeArgs( null, [ $order, $mapping ] );
+
+            $this->assertSame(
+                $expected_legacy,
+                $result[0]['paymentMethod'],
+                "UBL {$ubl_code} debe derivar a legacy {$expected_legacy} en payments[].paymentMethod (requerido por API Alegra)"
+            );
+        }
+    }
+
+    /**
+     * Test 21: Verificar que UBL sin equivalente legacy usa 'cash' como fallback en payments hijo
+     */
+    public function test_build_invoice_payments_data_uses_cash_fallback_for_unmappable_ubl() {
+        $order = $this->create_test_order();
+        $order->set_total( 50000 );
+        $order->set_currency( 'COP' );
+        $order->save();
+
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'build_invoice_payments_data' );
+        $method->setAccessible( true );
+
+        $unmappable_codes = [ 'DEBIT_TRANSFER', 'ACH_CREDIT', 'CREDIT_SAVING', 'MUTUAL_AGREEMENT' ];
+
+        foreach ( $unmappable_codes as $ubl_code ) {
+            $mapping = [ 'payment_method' => $ubl_code, 'account_id' => '1' ];
+            $result  = $method->invokeArgs( null, [ $order, $mapping ] );
+
+            $this->assertSame(
+                'cash',
+                $result[0]['paymentMethod'],
+                "UBL {$ubl_code} sin equivalente legacy debe usar 'cash' como fallback en payments[].paymentMethod"
+            );
+        }
     }
 
     /**
@@ -336,7 +397,7 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
 
         $raw_mapping = [
             'cod' => [
-                'payment_method' => 'cash',
+                'payment_method' => 'CASH',
                 'account_id' => '1',
             ],
             'invalid' => [
@@ -344,7 +405,7 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
                 'account_id' => '4',
             ],
             'bacs' => [
-                'payment_method' => 'transfer',
+                'payment_method' => 'CREDIT_TRANSFER_BANK',
                 'account_id' => '',
             ],
             'legacy' => 'unexpected',
@@ -355,13 +416,192 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
         $this->assertSame(
             [
                 'cod' => [
-                    'payment_method' => 'cash',
+                    'payment_method' => 'CASH',
                     'account_id' => '1',
+                    'payment_type' => 'CASH',
                 ],
             ],
             $result,
-            'Solo deben persistirse filas con método y cuenta completos.'
+            'Solo deben persistirse filas con método y cuenta completos; payment_type se auto-deriva del payment_method.'
         );
+    }
+
+    /**
+     * Test 12: Verificar que get_payment_type_from_method retorna CASH para métodos de efectivo/cheque/transferencia/depósito
+     */
+    public function test_get_payment_type_from_method_returns_cash_for_cash_methods() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'get_payment_type_from_method' );
+        $method->setAccessible( true );
+
+        $this->assertSame( 'CASH', $method->invoke( null, 'CASH' ) );
+        $this->assertSame( 'CASH', $method->invoke( null, 'CHECK' ) );
+        $this->assertSame( 'CASH', $method->invoke( null, 'CREDIT_TRANSFER_BANK' ) );
+        $this->assertSame( 'CASH', $method->invoke( null, 'BANK_DEPOSIT' ) );
+    }
+
+    /**
+     * Test 13: Verificar que get_payment_type_from_method retorna CREDIT para tarjetas
+     */
+    public function test_get_payment_type_from_method_returns_credit_for_card_methods() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'get_payment_type_from_method' );
+        $method->setAccessible( true );
+
+        $this->assertSame( 'CREDIT', $method->invoke( null, 'CREDIT_CARD' ) );
+        $this->assertSame( 'CREDIT', $method->invoke( null, 'DEBIT_CARD' ) );
+    }
+
+    /**
+     * Test 14: Verificar que normalize auto-deriva payment_type faltante según payment_method UBL
+     */
+    public function test_normalize_payment_gateways_mapping_auto_migrates_missing_payment_type() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'cod' => [
+                'payment_method' => 'CASH',
+                'account_id' => '1',
+                // sin payment_type
+            ],
+            'stripe' => [
+                'payment_method' => 'CREDIT_CARD',
+                'account_id' => '2',
+                // sin payment_type
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertSame( 'CASH',        $result['cod']['payment_type'],      'CASH debe auto-derivar payment_type CASH' );
+        $this->assertSame( 'CASH',        $result['cod']['payment_method'],     'CASH debe conservarse' );
+        $this->assertSame( 'CREDIT',      $result['stripe']['payment_type'],   'CREDIT_CARD debe auto-derivar payment_type CREDIT' );
+        $this->assertSame( 'CREDIT_CARD', $result['stripe']['payment_method'], 'CREDIT_CARD debe conservarse' );
+    }
+
+    /**
+     * Test 15: Verificar que normalize conserva payment_type explícito cuando es válido
+     */
+    public function test_normalize_payment_gateways_mapping_preserves_explicit_payment_type() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'bacs' => [
+                'payment_method' => 'CREDIT_TRANSFER_BANK',
+                'account_id' => '3',
+                'payment_type' => 'CREDIT', // override intencional
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertSame( 'CREDIT',               $result['bacs']['payment_type'],   'payment_type explícito válido debe conservarse' );
+        $this->assertSame( 'CREDIT_TRANSFER_BANK', $result['bacs']['payment_method'], 'CREDIT_TRANSFER_BANK debe conservarse' );
+    }
+
+    /**
+     * Test 16: Verificar que resolve_gateway_payment_mapping incluye payment_type en el resultado
+     */
+    public function test_resolve_gateway_payment_mapping_includes_payment_type() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'resolve_gateway_payment_mapping' );
+        $method->setAccessible( true );
+
+        $mappings = [
+            'bacs' => [
+                'payment_method' => 'CREDIT_TRANSFER_BANK',
+                'account_id' => '3',
+                'payment_type' => 'CASH',
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ 'bacs', $mappings, [ 'bacs' ] ] );
+
+        $this->assertArrayHasKey( 'payment_type', $result );
+        $this->assertSame( 'CASH', $result['payment_type'] );
+    }
+
+    /**
+     * Test 17: Verificar que los 6 códigos UBL principales son aceptados por normalize
+     */
+    public function test_normalize_payment_gateways_mapping_accepts_main_ubl_codes() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'gw_cash'        => [ 'payment_method' => 'CASH',                 'account_id' => '1' ],
+            'gw_check'       => [ 'payment_method' => 'CHECK',                'account_id' => '1' ],
+            'gw_transfer'    => [ 'payment_method' => 'CREDIT_TRANSFER_BANK', 'account_id' => '1' ],
+            'gw_deposit'     => [ 'payment_method' => 'BANK_DEPOSIT',         'account_id' => '1' ],
+            'gw_credit_card' => [ 'payment_method' => 'CREDIT_CARD',          'account_id' => '1' ],
+            'gw_debit_card'  => [ 'payment_method' => 'DEBIT_CARD',           'account_id' => '1' ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertSame( 'CASH',                 $result['gw_cash']['payment_method'] );
+        $this->assertSame( 'CHECK',                $result['gw_check']['payment_method'] );
+        $this->assertSame( 'CREDIT_TRANSFER_BANK', $result['gw_transfer']['payment_method'] );
+        $this->assertSame( 'BANK_DEPOSIT',         $result['gw_deposit']['payment_method'] );
+        $this->assertSame( 'CREDIT_CARD',          $result['gw_credit_card']['payment_method'] );
+        $this->assertSame( 'DEBIT_CARD',           $result['gw_debit_card']['payment_method'] );
+    }
+
+    /**
+     * Test 18: Verificar que códigos UBL válidos se aceptan y conservan tal cual
+     */
+    public function test_normalize_payment_gateways_mapping_accepts_ubl_catalog_codes() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'stripe' => [
+                'payment_method' => 'CREDIT_CARD',
+                'account_id' => '2',
+            ],
+            'paypal' => [
+                'payment_method' => 'DEBIT_TRANSFER',
+                'account_id' => '3',
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertArrayHasKey( 'stripe', $result );
+        $this->assertSame( 'CREDIT_CARD',    $result['stripe']['payment_method'], 'CREDIT_CARD debe conservarse tal cual' );
+        $this->assertArrayHasKey( 'paypal', $result );
+        $this->assertSame( 'DEBIT_TRANSFER', $result['paypal']['payment_method'], 'DEBIT_TRANSFER debe conservarse tal cual' );
+    }
+
+    /**
+     * Test 19: Verificar que códigos de pago fuera del catálogo son descartados
+     */
+    public function test_normalize_payment_gateways_mapping_rejects_unknown_payment_method() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'valid_gw' => [
+                'payment_method' => 'CASH',
+                'account_id' => '1',
+            ],
+            'invalid_gw' => [
+                'payment_method' => 'INVALID_CODE_XYZ',
+                'account_id' => '1',
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertArrayHasKey( 'valid_gw', $result,    'CASH debe ser aceptado' );
+        $this->assertArrayNotHasKey( 'invalid_gw', $result, 'Códigos fuera del catálogo deben descartarse' );
     }
 }
 

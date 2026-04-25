@@ -160,6 +160,37 @@ Si la opción "Crear productos automáticamente" está deshabilitada y un produc
 
 **Importante:** Si el pedido tiene múltiples productos y alguno no existe en Alegra, toda la factura se cancelará.
 
+= ¿Qué hace la sección "Métodos de pago"? =
+Esta sección permite relacionar cada pasarela de pago activa de WooCommerce con los datos de pago requeridos por Alegra para generar correctamente la factura.
+
+**Ubicación:** WooCommerce > Ajustes > Integración > Integration Alegra Woocommerce > Métodos de pago
+
+**Columnas de la tabla:**
+
+1. **Gateway WooCommerce**: Nombre de la pasarela de pago (por ejemplo: Tarjeta de crédito, Transferencia bancaria, PayU, etc.). Solo aparecen las pasarelas activas; las que tuvieron configuración previa y luego fueron desactivadas también se muestran para permitir su edición.
+
+2. **Tipo de pago**: Seleccione el método de pago equivalente en Alegra. Las opciones disponibles son:
+   - Efectivo
+   - Cheque
+   - Transferencia bancaria
+   - Depósito bancario
+   - Tarjeta de crédito
+   - Tarjeta de débito
+
+3. **Cuenta bancaria en Alegra**: Seleccione la cuenta bancaria activa en Alegra donde se registrará el cobro asociado a esta pasarela.
+
+4. **Forma de pago**: Indique si la factura se pagará de contado o a crédito. Este valor determina el campo `paymentForm` de la factura en Alegra.
+
+**Validaciones al guardar:**
+- Cada pasarela de pago activa debe tener los tres campos completos (Tipo de pago, Cuenta bancaria y Forma de pago).
+- Si algún campo queda vacío para una pasarela activa, la configuración no se guardará y se mostrará un error.
+- Las pasarelas inactivas con mapeo previo pueden quedar con datos incompletos sin bloquear el guardado.
+
+**Comportamiento en la factura:**
+- El **Tipo de pago** seleccionado determina el método de pago registrado en los pagos de la factura.
+- La **Cuenta bancaria** se asocia al cobro en Alegra.
+- La **Forma de pago** (CASH/CREDIT) define si la factura se emite como cobro inmediato o a crédito.
+
 = ¿Puedo usar sincronización masiva de productos? =
 Sí, el plugin incluye una opción de sincronización masiva de productos desde WooCommerce a Alegra.
 

@@ -147,4 +147,115 @@ class Test_Payment_Mapping_Settings extends WP_UnitTestCase {
             'Debe conservar el valor previo cuando no existen cuentas bancarias activas en Alegra.'
         );
     }
+
+    /**
+     * Test 4: Verificar que sanitize_payment_gateways_mapping_input conserva payment_type
+     */
+    public function test_sanitize_payment_gateways_mapping_input_includes_payment_type() {
+        $integration = $this->create_integration_test_double();
+
+        $reflection = new ReflectionClass( 'WC_Alegra_Integration' );
+        $method = $reflection->getMethod( 'sanitize_payment_gateways_mapping_input' );
+        $method->setAccessible( true );
+
+        $raw_value = [
+            'cod' => [
+                'payment_method' => 'cash',
+                'account_id' => '1',
+                'payment_type' => 'CASH',
+            ],
+            'stripe' => [
+                'payment_method' => 'credit-card',
+                'account_id' => '2',
+                'payment_type' => 'CREDIT',
+            ],
+            'injected' => [
+                'payment_method' => 'transfer',
+                'account_id' => '3',
+                'payment_type' => '<script>CREDIT</script>', // script content is stripped entirely
+            ],
+        ];
+
+        $result = $method->invokeArgs( $integration, [ $raw_value ] );
+
+        $this->assertSame( 'CASH',   $result['cod']['payment_type'],      'payment_type CASH debe conservarse' );
+        $this->assertSame( 'CREDIT', $result['stripe']['payment_type'],   'payment_type CREDIT debe conservarse' );
+        $this->assertSame( '',       $result['injected']['payment_type'],  'script tag con contenido debe vaciarse por seguridad' );
+    }
+
+    /**
+     * Test 5: Verificar que get_payment_mapping_rows incluye payment_type desde el mapeo guardado
+     */
+    public function test_get_payment_mapping_rows_includes_payment_type_from_saved_mapping() {
+        $integration = $this->create_integration_test_double();
+
+        $reflection = new ReflectionClass( 'WC_Alegra_Integration' );
+        $method = $reflection->getMethod( 'get_payment_mapping_rows' );
+        $method->setAccessible( true );
+
+        $active_gateways = [
+            'bacs' => 'Transferencia bancaria',
+        ];
+
+        $all_gateways = [
+            'bacs' => 'Transferencia bancaria',
+        ];
+
+        $saved_mappings = [
+            'bacs' => [
+                'payment_method' => 'transfer',
+                'account_id' => '3',
+                'payment_type' => 'CASH',
+            ],
+        ];
+
+        $rows = $method->invokeArgs( $integration, [ $active_gateways, $all_gateways, $saved_mappings ] );
+
+        $this->assertArrayHasKey( 'bacs', $rows );
+        $this->assertTrue( $rows['bacs']['active'] );
+    }
+
+    /**
+     * Test 6: Verificar que sanitize pasa códigos UBL tal cual (sin transformar)
+     */
+    public function test_sanitize_payment_gateways_mapping_passes_through_ubl_codes() {
+        $integration = $this->create_integration_test_double();
+
+        $reflection = new ReflectionClass( 'WC_Alegra_Integration' );
+        $method = $reflection->getMethod( 'sanitize_payment_gateways_mapping_input' );
+        $method->setAccessible( true );
+
+        $raw_value = [
+            'stripe' => [
+                'payment_method' => 'CREDIT_CARD',
+                'account_id' => '2',
+                'payment_type' => 'CREDIT',
+            ],
+            'bacs' => [
+                'payment_method' => 'CREDIT_TRANSFER_BANK',
+                'account_id' => '3',
+                'payment_type' => 'CASH',
+            ],
+        ];
+
+        $result = $method->invokeArgs( $integration, [ $raw_value ] );
+
+        $this->assertSame( 'CREDIT_CARD',         $result['stripe']['payment_method'], 'CREDIT_CARD debe pasar sin transformar' );
+        $this->assertSame( 'CREDIT',              $result['stripe']['payment_type'],   'payment_type CREDIT debe conservarse' );
+        $this->assertSame( 'CREDIT_TRANSFER_BANK', $result['bacs']['payment_method'],  'CREDIT_TRANSFER_BANK debe pasar sin transformar' );
+        $this->assertSame( 'CASH',                $result['bacs']['payment_type'],     'payment_type CASH debe conservarse' );
+    }
+
+    /**
+     * Test 7: Verificar que PAYMENT_METHODS_UI tiene exactamente los 6 métodos UBL del README
+     */
+    public function test_payment_methods_ui_has_exactly_six_ubl_entries() {
+        $expected_keys = [ 'CASH', 'CHECK', 'CREDIT_TRANSFER_BANK', 'BANK_DEPOSIT', 'CREDIT_CARD', 'DEBIT_CARD' ];
+
+        $this->assertSame(
+            $expected_keys,
+            array_keys( Integration_Alegra_WC::PAYMENT_METHODS_UI ),
+            'PAYMENT_METHODS_UI debe contener exactamente los 6 códigos UBL en orden correcto'
+        );
+    }
 }

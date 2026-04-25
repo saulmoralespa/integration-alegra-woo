@@ -81,11 +81,15 @@ return [
     'payment_gateways_mapping' => array(
         'title' => __( 'Mapeo de métodos de pago' ),
         'type' => 'payment_mappings_table',
-        'payment_methods' => Integration_Alegra_WC::PAYMENTS_METHODS,
+        'payment_methods' => Integration_Alegra_WC::PAYMENT_METHODS_UI,
+        'payment_types' => [
+            Integration_Alegra_WC::PAYMENT_TYPE_CASH   => 'Contado',
+            Integration_Alegra_WC::PAYMENT_TYPE_CREDIT => 'Crédito',
+        ],
         'bank_accounts' => $bank_accounts,
         'active_gateways' => $active_gateways,
         'all_gateways' => $all_gateways,
-        'description' => __( 'Debe configurar método de pago y cuenta bancaria para cada gateway activo. Los gateways inactivos con mapeo guardado también se muestran para edición.' ),
+        'description' => __( 'Debe configurar método de pago, cuenta bancaria y tipo de pago para cada gateway activo. Los gateways inactivos con mapeo guardado también se muestran para edición.' ),
         'desc_tip' => false
     ),
     'client'  => array(
