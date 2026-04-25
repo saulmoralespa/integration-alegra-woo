@@ -120,6 +120,9 @@ class Integration_Alegra_WC_Plugin
         add_action( 'admin_enqueue_scripts', array($this, 'enqueue_scripts_admin') );
         add_action( 'wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action( 'wp_ajax_integration_alegra_print_invoice', array($this, 'ajax_integration_alegra_print_invoice'));
+        add_action( 'admin_notices', array($this, 'premium_survey_admin_notice'));
+        add_action( 'wp_ajax_integration_alegra_send_premium_survey', array($this, 'ajax_integration_alegra_send_premium_survey'));
+        add_action( 'wp_ajax_integration_alegra_dismiss_premium_survey_notice', array($this, 'ajax_integration_alegra_dismiss_premium_survey_notice'));
         add_action('woocommerce_admin_order_data_after_order_details',  array($this, 'display_custom_editable_field_on_admin_orders'), 10);
         add_action('woocommerce_process_shop_order_meta', array($this, 'save_order_custom_field_meta'), 10);
 
@@ -157,8 +160,10 @@ class Integration_Alegra_WC_Plugin
 
     public function plugin_action_links($links)
     {
+        $survey_url = admin_url('admin.php?page=wc-settings&tab=integration&section=wc_alegra_integration&open_premium_survey=1');
         $links[] = '<a href="' . admin_url('admin.php?page=wc-settings&tab=integration&section=wc_alegra_integration') . '">' . 'Configuraciones' . '</a>';
         $links[] = '<a target="_blank" href="https://shop.saulmoralespa.com/integration-alegra-woocommerce/">' . 'Documentación' . '</a>';
+        $links[] = '<a href="' . esc_url($survey_url) . '">' . 'Encuesta Premium' . '</a>';
         return $links;
     }
 
@@ -373,7 +378,10 @@ class Integration_Alegra_WC_Plugin
 
     public function enqueue_scripts_admin($hook): void
     {
-        if ($hook === 'woocommerce_page_wc-orders'){
+        $load_for_orders = $hook === 'woocommerce_page_wc-orders';
+        $load_for_survey = $this->should_enqueue_premium_survey_assets_on_admin($hook);
+
+        if ($load_for_orders || $load_for_survey) {
             wp_enqueue_script( 'integration-alegra', $this->assets. 'js/integration-alegra.js', array( 'jquery' ), $this->version, true );
             wp_enqueue_script( 'integration-alegra-sweet-alert', $this->assets. 'js/sweetalert2.min.js', array( 'jquery' ), $this->version, true );
         }
@@ -463,5 +471,356 @@ class Integration_Alegra_WC_Plugin
             update_post_meta($order_id, '_billing_dni', sanitize_text_field($_POST['_billing_dni']));
         }
 
+    }
+
+    // =========================================================================
+    // Premium Survey
+    // =========================================================================
+
+    private function has_survey_eligible_store(): bool
+    {
+        return $this->is_alegra_integration_enabled();
+    }
+
+    private function is_woocommerce_admin_screen(): bool
+    {
+        if ( ! is_admin() || ! function_exists('get_current_screen') ) {
+            return false;
+        }
+
+        $screen = get_current_screen();
+
+        if ( ! $screen ) {
+            return false;
+        }
+
+        if ( str_starts_with($screen->id, 'woocommerce_page_') ) {
+            return true;
+        }
+
+        if ( ! function_exists('wc_get_screen_ids') ) {
+            return false;
+        }
+
+        return in_array($screen->id, wc_get_screen_ids(), true);
+    }
+
+    private function is_alegra_integration_settings_screen(): bool
+    {
+        if ( ! function_exists('get_current_screen') ) {
+            return false;
+        }
+
+        $screen = get_current_screen();
+
+        if ( ! $screen || $screen->id !== 'woocommerce_page_wc-settings' ) {
+            return false;
+        }
+
+        $tab     = isset($_GET['tab'])     ? sanitize_key(wp_unslash($_GET['tab']))     : '';
+        $section = isset($_GET['section']) ? sanitize_key(wp_unslash($_GET['section'])) : '';
+
+        return $tab === 'integration' && $section === 'wc_alegra_integration';
+    }
+
+    private function is_alegra_integration_settings_page_request(string $hook): bool
+    {
+        if ( $hook !== 'woocommerce_page_wc-settings' ) {
+            return false;
+        }
+
+        $tab     = isset($_GET['tab'])     ? sanitize_key(wp_unslash($_GET['tab']))     : '';
+        $section = isset($_GET['section']) ? sanitize_key(wp_unslash($_GET['section'])) : '';
+
+        return $tab === 'integration' && $section === 'wc_alegra_integration';
+    }
+
+    private function has_user_dismissed_premium_survey_notice(): bool
+    {
+        if ( ! is_user_logged_in() ) {
+            return false;
+        }
+
+        $dismissed = get_user_meta(get_current_user_id(), 'integration_alegra_premium_survey_notice_dismissed', true);
+
+        return $dismissed === 'yes';
+    }
+
+    private function should_expose_survey_on_admin(): bool
+    {
+        if ( ! current_user_can('manage_woocommerce') ) {
+            return false;
+        }
+
+        if ( ! $this->has_survey_eligible_store() ) {
+            return false;
+        }
+
+        if ( $this->has_user_dismissed_premium_survey_notice() ) {
+            return false;
+        }
+
+        return $this->is_woocommerce_admin_screen();
+    }
+
+    private function should_enqueue_premium_survey_assets_on_admin(string $hook): bool
+    {
+        if ( $this->is_alegra_integration_settings_page_request($hook) ) {
+            return true;
+        }
+
+        return $this->should_expose_survey_on_admin();
+    }
+
+    /**
+     * Validates and sanitizes the premium survey payload.
+     *
+     * @param array $payload Raw survey data (keys match form field names).
+     * @return array{valid: bool, data?: array, error?: string}
+     */
+    private function validate_survey_payload(array $payload): array
+    {
+        $q1_score        = isset($payload['q1_score'])        ? (int) $payload['q1_score']                                            : 0;
+        $q1_motivo       = isset($payload['q1_motivo'])       ? substr(sanitize_text_field(wp_unslash((string) $payload['q1_motivo'])), 0, 500) : '';
+        $q2_pain_point   = isset($payload['q2_pain_point'])   ? sanitize_text_field(wp_unslash((string) $payload['q2_pain_point']))   : '';
+        $q3_time_loss    = isset($payload['q3_time_loss'])    ? sanitize_text_field(wp_unslash((string) $payload['q3_time_loss']))    : '';
+        $q5_other_feature= isset($payload['q5_other_feature'])? sanitize_text_field(wp_unslash((string) $payload['q5_other_feature'])): '';
+        $q6_billing_model= isset($payload['q6_billing_model'])? sanitize_text_field(wp_unslash((string) $payload['q6_billing_model'])): '';
+        $q7_price_range  = isset($payload['q7_price_range'])  ? sanitize_text_field(wp_unslash((string) $payload['q7_price_range']))  : '';
+        $q8_open_feedback= isset($payload['q8_open_feedback'])? sanitize_textarea_field(wp_unslash((string) $payload['q8_open_feedback'])): '';
+        $consent_yes_no  = isset($payload['consent_yes_no']) && sanitize_text_field(wp_unslash((string) $payload['consent_yes_no'])) === 'yes' ? 'yes' : 'no';
+
+        // Normalise q4_top_features: accept array, JSON string, or CSV string.
+        $q4_raw = isset($payload['q4_top_features']) ? $payload['q4_top_features'] : array();
+
+        if ( is_string($q4_raw) ) {
+            $decoded = json_decode($q4_raw, true);
+            if ( JSON_ERROR_NONE === json_last_error() && is_array($decoded) ) {
+                $q4_raw = $decoded;
+            } else {
+                $q4_raw = array_filter(array_map('trim', explode(',', $q4_raw)));
+            }
+        }
+
+        if ( ! is_array($q4_raw) ) {
+            $q4_raw = array();
+        }
+
+        $q4_top_features = array_slice(
+            array_values(
+                array_unique(
+                    array_filter(
+                        array_map(
+                            static fn( $v ): string => sanitize_text_field((string) $v),
+                            $q4_raw
+                        )
+                    )
+                )
+            ),
+            0,
+            3
+        );
+
+        // --- Validation rules ---
+
+        if ( $q1_score < 1 || $q1_score > 10 ) {
+            return array(
+                'valid' => false,
+                'error' => __('La satisfacción debe ser un valor entre 1 y 10.'),
+            );
+        }
+
+        if ( $q1_score < 8 && '' === $q1_motivo ) {
+            return array(
+                'valid' => false,
+                'error' => __('Por favor explica el motivo de tu baja satisfacción.'),
+            );
+        }
+
+        if ( empty($q4_top_features) ) {
+            return array(
+                'valid' => false,
+                'error' => __('Selecciona al menos una funcionalidad premium.'),
+            );
+        }
+
+        if ( '' === $q7_price_range ) {
+            return array(
+                'valid' => false,
+                'error' => __('Selecciona un rango de precio.'),
+            );
+        }
+
+        return array(
+            'valid' => true,
+            'data'  => array(
+                'q1_score'         => $q1_score,
+                'q1_motivo'        => $q1_motivo,
+                'q2_pain_point'    => $q2_pain_point,
+                'q3_time_loss'     => $q3_time_loss,
+                'q4_top_features'  => $q4_top_features,
+                'q5_other_feature' => $q5_other_feature,
+                'q6_billing_model' => $q6_billing_model,
+                'q7_price_range'   => $q7_price_range,
+                'q8_open_feedback' => $q8_open_feedback,
+                'consent_yes_no'   => $consent_yes_no,
+            ),
+        );
+    }
+
+    public function premium_survey_admin_notice(): void
+    {
+        if ( ! $this->should_expose_survey_on_admin() || $this->is_alegra_integration_settings_screen() ) {
+            return;
+        }
+
+        $settings_url            = admin_url('admin.php?page=wc-settings&tab=integration&section=wc_alegra_integration');
+        $settings_with_survey_url = add_query_arg('open_premium_survey', '1', $settings_url);
+        ?>
+        <div class="notice notice-info is-dismissible alegra-premium-survey-notice" data-dismiss-nonce="<?php echo esc_attr(wp_create_nonce('integration_alegra_dismiss_premium_survey_notice')); ?>">
+            <p>
+                <strong>Integration Alegra Woocommerce: ayúdanos a priorizar la versión premium.</strong>
+                Esta encuesta toma menos de 3 minutos y nos ayuda a mejorar este plugin para tu tienda.
+            </p>
+            <p>
+                <button type="button" class="button button-primary alegra-send-premium-survey" data-nonce="<?php echo esc_attr(wp_create_nonce('integration_alegra_send_premium_survey')); ?>">
+                    Responder encuesta premium
+                </button>
+                <a class="button button-secondary" href="<?php echo esc_url($settings_with_survey_url); ?>">Abrir desde configuraciones</a>
+            </p>
+        </div>
+        <?php
+    }
+
+    public function ajax_integration_alegra_dismiss_premium_survey_notice(): void
+    {
+        $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+
+        if ( ! wp_verify_nonce($nonce, 'integration_alegra_dismiss_premium_survey_notice') ) {
+            wp_send_json(array(
+                'status'  => false,
+                'message' => __('No se pudo validar la solicitud.'),
+            ));
+        }
+
+        if ( ! is_user_logged_in() || ! current_user_can('manage_woocommerce') ) {
+            wp_send_json(array(
+                'status'  => false,
+                'message' => __('No tienes permisos para esta acción.'),
+            ));
+        }
+
+        update_user_meta(get_current_user_id(), 'integration_alegra_premium_survey_notice_dismissed', 'yes');
+
+        wp_send_json(array('status' => true));
+    }
+
+    public function ajax_integration_alegra_send_premium_survey(): void
+    {
+        $nonce = isset($_REQUEST['nonce']) ? sanitize_text_field(wp_unslash($_REQUEST['nonce'])) : '';
+
+        if ( ! wp_verify_nonce($nonce, 'integration_alegra_send_premium_survey') ) {
+            wp_send_json(array(
+                'status'  => false,
+                'message' => __('No se pudo validar la solicitud. Recarga la página e intenta de nuevo.'),
+            ));
+        }
+
+        if ( ! is_user_logged_in() || ! current_user_can('manage_woocommerce') ) {
+            wp_send_json(array(
+                'status'  => false,
+                'message' => __('No tienes permisos para esta acción.'),
+            ));
+        }
+
+        $validation = $this->validate_survey_payload($_POST);
+
+        if ( ! $validation['valid'] ) {
+            wp_send_json(array(
+                'status'  => false,
+                'message' => $validation['error'],
+            ));
+        }
+
+        $data = $validation['data'];
+
+        $response_id  = wp_generate_uuid4();
+        $date_time     = wp_date('Y-m-d H:i:s');
+        $date_time_iso = wp_date('c');
+        $site_name     = get_bloginfo('name');
+        $site_url      = home_url();
+
+        $default_country = get_option('woocommerce_default_country', '');
+        $country  = is_string($default_country) ? explode(':', $default_country)[0] : '';
+        $currency = function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : get_option('woocommerce_currency', 'N/A');
+
+        $recipient = apply_filters('integration_alegra_premium_survey_email_recipient', 'moralespachecopablo@gmail.com');
+        $recipient = is_array($recipient)
+            ? array_filter(array_map('sanitize_email', $recipient))
+            : sanitize_email((string) $recipient);
+
+        if ( empty($recipient) ) {
+            $this->log('No premium survey email recipient configured', 'error');
+            wp_send_json(array(
+                'status'  => false,
+                'message' => __('No hay correo de destino configurado para la encuesta premium.'),
+            ));
+        }
+
+        $admin_email = sanitize_email((string) get_option('admin_email'));
+        $headers     = array('Content-Type: text/plain; charset=UTF-8');
+
+        if ( ! empty($admin_email) ) {
+            $headers[] = sprintf('Reply-To: %s', $admin_email);
+        }
+
+        $subject = sprintf(
+            '[Alegra Woo] Respuesta encuesta premium | %s | %s',
+            $site_url,
+            $date_time
+        );
+
+        $message_lines = array(
+            sprintf('Response ID: %s',                     $response_id),
+            sprintf('Fecha envio: %s',                     $date_time_iso),
+            sprintf('Sitio: %s',                           $site_name),
+            sprintf('URL tienda: %s',                      $site_url),
+            sprintf('Pais/moneda: %s / %s',                $country ?: 'N/A', $currency ?: 'N/A'),
+            sprintf('Version plugin: %s',                  (string) $this->version),
+            sprintf('Version WP/WC: %s / %s',             get_bloginfo('version'), defined('WC_VERSION') ? WC_VERSION : 'N/A'),
+            sprintf('Satisfaccion actual (1-10): %d',      $data['q1_score']),
+            sprintf('Motivo baja satisfaccion: %s',        $data['q1_motivo']        ?: 'N/A'),
+            sprintf('Dolor principal actual: %s',          $data['q2_pain_point']    ?: 'N/A'),
+            sprintf('Tiempo semanal perdido: %s',          $data['q3_time_loss']     ?: 'N/A'),
+            sprintf('Top 3 funcionalidades premium: %s',   implode(', ', $data['q4_top_features'])),
+            sprintf('Otras funcionalidades: %s',           $data['q5_other_feature'] ?: 'N/A'),
+            sprintf('Modelo de cobro preferido: %s',       $data['q6_billing_model'] ?: 'N/A'),
+            sprintf('Rango de precio mensual: %s',         $data['q7_price_range']),
+            sprintf('Comentario abierto: %s',              $data['q8_open_feedback'] ?: 'N/A'),
+            sprintf('Consentimiento contacto: %s',         $data['consent_yes_no']),
+        );
+
+        $mail_sent = wp_mail($recipient, $subject, implode("\n", $message_lines), $headers);
+
+        if ( ! $mail_sent ) {
+            $this->log(
+                array(
+                    'event'       => 'premium_survey_send_failed',
+                    'response_id' => $response_id,
+                    'site_url'    => $site_url,
+                ),
+                'error'
+            );
+
+            wp_send_json(array(
+                'status'  => false,
+                'message' => __('No fue posible enviar tu respuesta por email. Intenta nuevamente.'),
+            ));
+        }
+
+        wp_send_json(array(
+            'status'  => true,
+            'message' => __('Gracias. Tu respuesta fue enviada correctamente.'),
+        ));
     }
 }

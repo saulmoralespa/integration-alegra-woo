@@ -5,7 +5,7 @@ Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, s
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.1.1
 WC requires at least: 9.6
 WC tested up to: 10.7
 License: GNU General Public License v3.0
@@ -219,6 +219,10 @@ Sí, el plugin incluye una opción de sincronización masiva de productos desde 
 5.  screenshot-5.png
 
 == Changelog ==
+
+= 0.1.1 =
+* Added premium survey modal to collect feedback for prioritizing the premium version
+* Added payment type mapping and validation for WooCommerce gateways
 
 = 0.1.0 =
 * Added payment mapping configuration by WooCommerce gateway in a dedicated "Métodos de pago" section

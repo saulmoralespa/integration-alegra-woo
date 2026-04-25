@@ -8,7 +8,7 @@ GREEN := \033[0;32m
 YELLOW := \033[1;33m
 NC := \033[0m # No Color
 
-.PHONY: test test-calculate-dv test-invoice test-client test-all help
+.PHONY: test test-calculate-dv test-invoice test-client test-survey test-all help
 
 # Ayuda
 help:
@@ -17,6 +17,7 @@ help:
 	@echo "  $(GREEN)make test-calculate-dv$(NC) - Tests de calculate_dv"
 	@echo "  $(GREEN)make test-invoice$(NC)      - Tests de Invoice Generation"
 	@echo "  $(GREEN)make test-client$(NC)       - Tests de Client Management"
+	@echo "  $(GREEN)make test-survey$(NC)       - Tests de Premium Survey"
 	@echo "  $(GREEN)make test-all$(NC)          - Todos los tests con detalles"
 
 # Ejecutar todos los tests
@@ -38,6 +39,11 @@ test-invoice:
 test-client:
 	@echo "$(YELLOW)Ejecutando tests de Client Management...$(NC)"
 	WP_TEST__DIR=${WP_TEST__DIR} ${TEST_UNIT} --filter Test_Client_Management --testdox --colors=always
+
+# Tests de Premium Survey
+test-survey:
+	@echo "$(YELLOW)Ejecutando tests de Premium Survey...$(NC)"
+	WP_TEST__DIR=${WP_TEST__DIR} ${TEST_UNIT} --filter Test_Premium_Survey --testdox --colors=always
 
 # Todos los tests con detalles
 test-all:

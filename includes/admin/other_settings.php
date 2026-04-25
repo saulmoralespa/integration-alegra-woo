@@ -34,6 +34,16 @@ $active_gateways = Integration_Alegra_WC::get_wc_payment_gateways(true);
 $all_gateways = Integration_Alegra_WC::get_wc_payment_gateways();
 
 return [
+    'premium_survey' => array(
+        'title'             => __( 'Encuesta de versión premium' ),
+        'type'              => 'button',
+        'class'             => 'button-primary alegra-send-premium-survey',
+        'description'       => __( 'Ayúdanos a priorizar la versión premium. Toma menos de 3 minutos.' ),
+        'text'              => 'Responder encuesta',
+        'custom_attributes' => array(
+            'data-nonce' => wp_create_nonce('integration_alegra_send_premium_survey'),
+        ),
+    ),
     'invoice'  => array(
         'title' => __( 'Facturas de ventas' ),
         'type'  => 'title'
