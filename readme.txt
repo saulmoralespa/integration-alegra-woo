@@ -5,7 +5,7 @@ Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, s
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.1.1
+Stable tag: 0.1.2
 WC requires at least: 9.6
 WC tested up to: 10.7
 License: GNU General Public License v3.0
@@ -169,27 +169,23 @@ Esta sección permite relacionar cada pasarela de pago activa de WooCommerce con
 
 1. **Gateway WooCommerce**: Nombre de la pasarela de pago (por ejemplo: Tarjeta de crédito, Transferencia bancaria, PayU, etc.). Solo aparecen las pasarelas activas; las que tuvieron configuración previa y luego fueron desactivadas también se muestran para permitir su edición.
 
-2. **Tipo de pago**: Seleccione el método de pago equivalente en Alegra. Las opciones disponibles son:
-   - Efectivo
-   - Cheque
-   - Transferencia bancaria
-   - Depósito bancario
-   - Tarjeta de crédito
-   - Tarjeta de débito
+2. **Tipo de pago**: Indique si la factura se pagará de contado (CASH) o a crédito (CREDIT). Este valor determina el campo `paymentForm` de la factura en Alegra.
 
-3. **Cuenta bancaria en Alegra**: Seleccione la cuenta bancaria activa en Alegra donde se registrará el cobro asociado a esta pasarela.
+3. **Forma de pago**: Seleccione el método de pago equivalente en Alegra (Efectivo, Cheque, Transferencia, etc.). **Obligatorio cuando el Tipo de pago es Contado (CASH)**; opcional cuando es Crédito (CREDIT).
 
-4. **Forma de pago**: Indique si la factura se pagará de contado o a crédito. Este valor determina el campo `paymentForm` de la factura en Alegra.
+4. **Cuenta bancaria en Alegra**: Seleccione la cuenta bancaria activa en Alegra donde se registrará el cobro. Siempre opcional.
 
 **Validaciones al guardar:**
-- Cada pasarela de pago activa debe tener los tres campos completos (Tipo de pago, Cuenta bancaria y Forma de pago).
-- Si algún campo queda vacío para una pasarela activa, la configuración no se guardará y se mostrará un error.
+- El Tipo de pago es obligatorio para todas las pasarelas activas.
+- La Forma de pago es obligatoria únicamente cuando el Tipo de pago es Contado (CASH).
+- La Cuenta bancaria es siempre opcional.
+- Si una pasarela activa con Tipo de pago CASH no tiene Forma de pago, la configuración no se guardará y se mostrará un error.
 - Las pasarelas inactivas con mapeo previo pueden quedar con datos incompletos sin bloquear el guardado.
 
 **Comportamiento en la factura:**
-- El **Tipo de pago** seleccionado determina el método de pago registrado en los pagos de la factura.
-- La **Cuenta bancaria** se asocia al cobro en Alegra.
-- La **Forma de pago** (CASH/CREDIT) define si la factura se emite como cobro inmediato o a crédito.
+- La **Forma de pago** seleccionada determina el método de pago registrado en los pagos de la factura (`paymentMethod`). Si está vacía (CREDIT), ese campo se omite del payload.
+- La **Cuenta bancaria** se asocia al cobro en Alegra cuando está configurada.
+- El **Tipo de pago** (CASH/CREDIT) define si la factura se emite como cobro inmediato o a crédito (`paymentForm`).
 
 = ¿Puedo usar sincronización masiva de productos? =
 Sí, el plugin incluye una opción de sincronización masiva de productos desde WooCommerce a Alegra.
@@ -219,6 +215,15 @@ Sí, el plugin incluye una opción de sincronización masiva de productos desde 
 5.  screenshot-5.png
 
 == Changelog ==
+
+= 0.1.2 =
+* Fixed payment method (Forma de pago) is now required only when payment type is CASH; CREDIT gateways can be saved without it
+* Fixed invoice payload no longer includes top-level `paymentMethod` field when payment method is empty (CREDIT without Forma de pago)
+* Fixed `payments` array in invoice is only sent when it contains at least one child with a value (paymentMethod or account)
+* Added live UX validation in payment mapping settings: Forma de pago field is highlighted and Guardar cambios is disabled when a CASH row has no Forma de pago selected
+* Added detailed error message listing each gateway that requires Forma de pago to be completed before saving
+* Updated payment mapping table column order: Gateway WooCommerce → Tipo de pago → Forma de pago → Cuenta bancaria en Alegra
+* Updated settings description to clarify that Forma de pago is required for CASH and optional for CREDIT; bank account is always optional
 
 = 0.1.1 =
 * Added premium survey modal to collect feedback for prioritizing the premium version

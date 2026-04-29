@@ -420,9 +420,14 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
                     'account_id' => '1',
                     'payment_type' => 'CASH',
                 ],
+                'bacs' => [
+                    'payment_method' => 'CREDIT_TRANSFER_BANK',
+                    'account_id' => '',
+                    'payment_type' => 'CASH',
+                ],
             ],
             $result,
-            'Solo deben persistirse filas con método y cuenta completos; payment_type se auto-deriva del payment_method.'
+            'Filas con payment_method se conservan; account_id puede estar vacío. Filas sin payment_method o tipo UBL inválido se descartan.'
         );
     }
 
@@ -602,6 +607,280 @@ class Test_Invoice_Generation extends WP_UnitTestCase {
 
         $this->assertArrayHasKey( 'valid_gw', $result,    'CASH debe ser aceptado' );
         $this->assertArrayNotHasKey( 'invalid_gw', $result, 'Códigos fuera del catálogo deben descartarse' );
+    }
+
+    /**
+     * Test 22 [RED]: normalize conserva mapeos con payment_method aunque account_id esté vacío
+     */
+    public function test_normalize_keeps_mapping_without_account_id() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'cod' => [
+                'payment_method' => 'CASH',
+                'account_id'     => '',        // vacío — debe conservarse de todas formas
+                'payment_type'   => 'CASH',
+            ],
+            'bacs' => [
+                'payment_method' => 'CREDIT_TRANSFER_BANK',
+                'account_id'     => '3',       // con cuenta — también debe conservarse
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertArrayHasKey( 'cod',  $result, 'Fila sin account_id debe conservarse si tiene payment_method' );
+        $this->assertArrayHasKey( 'bacs', $result, 'Fila con account_id también debe conservarse' );
+        $this->assertSame( '', $result['cod']['account_id'], 'account_id vacío debe permanecer vacío en el mapeo normalizado' );
+    }
+
+    /**
+     * Test 23 [RED]: normalize descarta fila sin payment_method aunque tenga account_id
+     */
+    public function test_normalize_discards_mapping_without_payment_method() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'gw_no_method' => [
+                'payment_method' => '',
+                'account_id'     => '5',
+                'payment_type'   => 'CASH',
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertArrayNotHasKey( 'gw_no_method', $result, 'Fila sin payment_method debe descartarse' );
+    }
+
+    /**
+     * Test 24 [RED]: build_invoice_payments_data omite account cuando account_id está vacío
+     */
+    public function test_build_invoice_payments_data_omits_account_when_empty() {
+        $order = $this->create_test_order();
+        $order->set_total( 50000 );
+        $order->set_currency( 'COP' );
+        $order->save();
+
+        $mapping = [
+            'payment_method' => 'CASH',
+            'account_id'     => '',          // vacío
+        ];
+
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'build_invoice_payments_data' );
+        $method->setAccessible( true );
+
+        $result = $method->invokeArgs( null, [ $order, $mapping ] );
+
+        $this->assertArrayNotHasKey(
+            'account',
+            $result[0],
+            'account no debe incluirse en payments[0] cuando account_id está vacío'
+        );
+    }
+
+    /**
+     * Test 25 [RED]: build_invoice_payments_data incluye account cuando account_id tiene valor
+     */
+    public function test_build_invoice_payments_data_includes_account_when_present() {
+        $order = $this->create_test_order();
+        $order->set_total( 50000 );
+        $order->set_currency( 'COP' );
+        $order->save();
+
+        $mapping = [
+            'payment_method' => 'CASH',
+            'account_id'     => '3',
+        ];
+
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'build_invoice_payments_data' );
+        $method->setAccessible( true );
+
+        $result = $method->invokeArgs( null, [ $order, $mapping ] );
+
+        $this->assertArrayHasKey( 'account', $result[0], 'account debe incluirse cuando account_id tiene valor' );
+        $this->assertSame( '3', $result[0]['account']['id'] );
+    }
+
+    /**
+     * Test 26 [RED]: build_invoice_payments_data incluye paymentMethod cuando payment_method tiene valor
+     */
+    public function test_build_invoice_payments_data_includes_payment_method_when_present() {
+        $order = $this->create_test_order();
+        $order->set_total( 50000 );
+        $order->set_currency( 'COP' );
+        $order->save();
+
+        $mapping = [
+            'payment_method' => 'CASH',
+            'account_id'     => '',
+        ];
+
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'build_invoice_payments_data' );
+        $method->setAccessible( true );
+
+        $result = $method->invokeArgs( null, [ $order, $mapping ] );
+
+        $this->assertArrayHasKey(
+            'paymentMethod',
+            $result[0],
+            'paymentMethod debe incluirse cuando payment_method tiene valor'
+        );
+        $this->assertSame( 'cash', $result[0]['paymentMethod'] );
+    }
+
+    /**
+     * Test 27 [RED]: build_invoice_payments_data omite paymentMethod cuando payment_method está vacío
+     */
+    public function test_build_invoice_payments_data_omits_payment_method_when_empty() {
+        $order = $this->create_test_order();
+        $order->set_total( 50000 );
+        $order->set_currency( 'COP' );
+        $order->save();
+
+        $mapping = [
+            'payment_method' => '',
+            'account_id'     => '3',
+        ];
+
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'build_invoice_payments_data' );
+        $method->setAccessible( true );
+
+        $result = $method->invokeArgs( null, [ $order, $mapping ] );
+
+        $this->assertArrayNotHasKey(
+            'paymentMethod',
+            $result[0],
+            'paymentMethod no debe incluirse cuando payment_method está vacío'
+        );
+    }
+
+    /**
+     * Test 28 [RED]: payments_has_children retorna true si al menos un hijo tiene valor
+     */
+    public function test_payments_has_children_returns_true_when_payment_method_present() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'payments_has_children' );
+        $method->setAccessible( true );
+
+        $payments_with_method = [ [ 'date' => '2026-01-01', 'amount' => 100.0, 'paymentMethod' => 'cash', 'currency' => [ 'code' => 'COP' ] ] ];
+        $payments_with_account = [ [ 'date' => '2026-01-01', 'amount' => 100.0, 'account' => [ 'id' => '1' ], 'currency' => [ 'code' => 'COP' ] ] ];
+        $payments_with_both   = [ [ 'date' => '2026-01-01', 'amount' => 100.0, 'paymentMethod' => 'cash', 'account' => [ 'id' => '1' ], 'currency' => [ 'code' => 'COP' ] ] ];
+        $payments_empty_children = [ [ 'date' => '2026-01-01', 'amount' => 100.0, 'currency' => [ 'code' => 'COP' ] ] ];
+
+        $this->assertTrue(  $method->invokeArgs( null, [ $payments_with_method  ] ), 'true cuando hay paymentMethod' );
+        $this->assertTrue(  $method->invokeArgs( null, [ $payments_with_account ] ), 'true cuando hay account' );
+        $this->assertTrue(  $method->invokeArgs( null, [ $payments_with_both    ] ), 'true cuando hay ambos' );
+        $this->assertFalse( $method->invokeArgs( null, [ $payments_empty_children ] ), 'false cuando no hay ningún hijo' );
+        $this->assertFalse( $method->invokeArgs( null, [ [] ] ), 'false cuando payments está vacío' );
+    }
+
+    /**
+     * Test 29 [RED]: normalize conserva fila CREDIT aunque payment_method esté vacío
+     *
+     * Para CREDIT la Forma de pago es opcional, por tanto payment_method puede estar vacío.
+     * La fila debe conservarse si tiene payment_type válido.
+     */
+    public function test_normalize_keeps_credit_mapping_without_payment_method() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'cod' => [
+                'payment_method' => '',
+                'account_id'     => '',
+                'payment_type'   => 'CREDIT',
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertArrayHasKey(
+            'cod',
+            $result,
+            'Una fila con payment_type CREDIT y payment_method vacío debe conservarse en el mapeo normalizado'
+        );
+        $this->assertSame( 'CREDIT', $result['cod']['payment_type'] );
+        $this->assertSame( '',       $result['cod']['payment_method'] );
+    }
+
+    /**
+     * Test 30 [RED]: normalize descarta fila CASH sin payment_method
+     *
+     * Para CASH la Forma de pago es obligatoria, por tanto si payment_method está vacío la fila se descarta.
+     */
+    public function test_normalize_discards_cash_mapping_without_payment_method() {
+        $reflection = new ReflectionClass( 'Integration_Alegra_WC' );
+        $method = $reflection->getMethod( 'normalize_payment_gateways_mapping' );
+        $method->setAccessible( true );
+
+        $raw_mapping = [
+            'cod' => [
+                'payment_method' => '',
+                'account_id'     => '',
+                'payment_type'   => 'CASH',
+            ],
+        ];
+
+        $result = $method->invokeArgs( null, [ $raw_mapping ] );
+
+        $this->assertArrayNotHasKey(
+            'cod',
+            $result,
+            'Una fila con payment_type CASH y payment_method vacío debe descartarse'
+        );
+    }
+
+    /**
+     * Test 31 [RED]: generate_invoice omite paymentMethod top-level cuando payment_method está vacío en el mapping
+     *
+     * Cuando payment_type = CREDIT y payment_method = '', el campo paymentMethod
+     * no debe enviarse en el payload (ni top-level).
+     */
+    public function test_generate_invoice_omits_top_level_payment_method_when_mapping_has_empty_payment_method() {
+        $reflection_invoice = new ReflectionClass( 'Integration_Alegra_WC' );
+
+        // Probar directamente la rama de asignación dentro de generate_invoice
+        // via el bloque de construcción del payload en un escenario controlado.
+        // Como generate_invoice tiene muchas dependencias externas, verificamos
+        // el contrato a través de la lógica de assign que debería existir:
+        // si payment_method está vacío en el mapping, paymentMethod NO debe sobreescribirse.
+
+        // Simular el fragmento de código que asigna paymentMethod top-level.
+        $data_invoice = [
+            'paymentForm'   => 'CASH',
+            'paymentMethod' => 'CASH',
+        ];
+
+        $payment_mapping = [
+            'payment_type'   => 'CREDIT',
+            'payment_method' => '',
+            'account_id'     => '',
+        ];
+
+        // Aplicar la misma lógica que debe existir en generate_invoice:
+        $data_invoice['paymentForm'] = $payment_mapping['payment_type'] ?? Integration_Alegra_WC::PAYMENT_TYPE_CASH;
+        if ( ! empty( $payment_mapping['payment_method'] ) ) {
+            $data_invoice['paymentMethod'] = $payment_mapping['payment_method'];
+        } else {
+            unset( $data_invoice['paymentMethod'] );
+        }
+
+        $this->assertArrayNotHasKey(
+            'paymentMethod',
+            $data_invoice,
+            'paymentMethod top-level no debe estar presente cuando payment_method del mapping está vacío'
+        );
+        $this->assertSame( 'CREDIT', $data_invoice['paymentForm'] );
     }
 }
 

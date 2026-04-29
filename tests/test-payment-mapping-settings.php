@@ -258,4 +258,294 @@ class Test_Payment_Mapping_Settings extends WP_UnitTestCase {
             'PAYMENT_METHODS_UI debe contener exactamente los 6 códigos UBL en orden correcto'
         );
     }
+
+    /**
+     * Test 8 [RED]: Gateway activo con payment_type + payment_method y sin account_id debe poder guardarse
+     *
+     * La cuenta bancaria es opcional; solo payment_type y payment_method son obligatorios
+     * para un gateway activo.
+     */
+    public function test_validate_active_gateway_saves_without_account_id() {
+        update_option( 'woocommerce_wc_alegra_integration_settings', [
+            'enabled' => 'no',
+            'payment_gateways_mapping' => [],
+        ] );
+
+        $integration = $this->create_integration_test_double();
+
+        $value = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => 'CASH',
+                'account_id'     => '',
+            ],
+        ];
+
+        // Mock get_wc_payment_gateways to return 'cod' as active.
+        $result = $integration->validate_payment_mappings_table_field( 'payment_gateways_mapping', $value );
+
+        $this->assertArrayHasKey(
+            'cod',
+            $result,
+            'Un gateway activo con payment_type + payment_method y sin account_id debe guardarse correctamente'
+        );
+    }
+
+    /**
+     * Test 9 [RED]: validate falla cuando payment_method está vacío para gateway activo
+     */
+    public function test_validate_active_gateway_fails_when_payment_method_missing() {
+        $existing_mapping = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => 'CASH',
+                'account_id'     => '1',
+            ],
+        ];
+
+        update_option( 'woocommerce_wc_alegra_integration_settings', [
+            'enabled' => 'no',
+            'payment_gateways_mapping' => $existing_mapping,
+        ] );
+
+        $integration = $this->create_integration_test_double();
+
+        $value = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => '',
+                'account_id'     => '',
+            ],
+        ];
+
+        $result = $integration->validate_payment_mappings_table_field( 'payment_gateways_mapping', $value );
+
+        // Row with empty payment_method is silently skipped (not an error), returns empty validated mapping.
+        $this->assertArrayNotHasKey(
+            'cod',
+            $result,
+            'Una fila sin payment_method se omite silenciosamente; el resultado no contiene el gateway'
+        );
+    }
+
+    /**
+     * Test 10 [RED]: sin cuentas activas en Alegra no bloquea el guardado cuando account_id no se envía
+     */
+    public function test_validate_does_not_block_when_no_bank_accounts_and_no_account_id_provided() {
+        update_option( 'woocommerce_wc_alegra_integration_settings', [
+            'enabled' => 'no',
+            'payment_gateways_mapping' => [],
+        ] );
+
+        $integration = $this->create_integration_test_double();
+
+        // No bank accounts at all (Integration disabled => get_bank_accounts returns [])
+        // but account_id is not provided => should NOT block.
+        $value = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => 'CASH',
+                'account_id'     => '',
+            ],
+        ];
+
+        $result = $integration->validate_payment_mappings_table_field( 'payment_gateways_mapping', $value );
+
+        // Must NOT return the old value as-is due to "no bank accounts" error.
+        // The 'cod' key must be present (saved successfully).
+        $this->assertArrayHasKey(
+            'cod',
+            $result,
+            'Ausencia de cuentas bancarias no debe bloquear el guardado cuando account_id está vacío'
+        );
+    }
+
+    /**
+     * Test 11 [RED]: account_id inválido sí debe producir error cuando se proporciona
+     */
+    public function test_validate_rejects_invalid_account_id_when_provided() {
+        $existing_mapping = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => 'CASH',
+                'account_id'     => '1',
+            ],
+        ];
+
+        update_option( 'woocommerce_wc_alegra_integration_settings', [
+            'enabled'                  => 'no',
+            'payment_gateways_mapping' => $existing_mapping,
+        ] );
+
+        $integration = $this->create_integration_test_double();
+
+        // account_id '999' is not in the list of active Alegra bank accounts (which is empty).
+        $value = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => 'CASH',
+                'account_id'     => '999',
+            ],
+        ];
+
+        $result = $integration->validate_payment_mappings_table_field( 'payment_gateways_mapping', $value );
+
+        $this->assertSame(
+            $existing_mapping,
+            $result,
+            'Un account_id que no existe en Alegra debe rechazarse y devolver el valor previo'
+        );
+    }
+
+    /**
+     * Test 12 [RED]: gateway activo con payment_type CREDIT y payment_method vacío debe guardarse
+     *
+     * Para CREDIT la Forma de pago es opcional.
+     */
+    public function test_validate_active_gateway_credit_saves_without_payment_method() {
+        update_option( 'woocommerce_wc_alegra_integration_settings', [
+            'enabled'                  => 'no',
+            'payment_gateways_mapping' => [],
+        ] );
+
+        $integration = $this->create_integration_test_double();
+
+        $value = [
+            'cod' => [
+                'payment_type'   => 'CREDIT',
+                'payment_method' => '',
+                'account_id'     => '',
+            ],
+        ];
+
+        $result = $integration->validate_payment_mappings_table_field( 'payment_gateways_mapping', $value );
+
+        $this->assertArrayHasKey(
+            'cod',
+            $result,
+            'Un gateway activo con payment_type CREDIT y payment_method vacío debe guardarse (Forma de pago opcional en CREDIT)'
+        );
+    }
+
+    /**
+     * Test 13 [RED]: gateway activo con payment_type CASH y payment_method vacío se omite silenciosamente
+     *
+     * Contraste con Test 12: para CASH la Forma de pago es obligatoria; la fila no se guarda.
+     * (El comportamiento es la omisión silenciosa de la fila, igual que Test 9.)
+     */
+    public function test_validate_active_gateway_cash_omits_row_without_payment_method() {
+        update_option( 'woocommerce_wc_alegra_integration_settings', [
+            'enabled'                  => 'no',
+            'payment_gateways_mapping' => [],
+        ] );
+
+        $integration = $this->create_integration_test_double();
+
+        $value = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => '',
+                'account_id'     => '',
+            ],
+        ];
+
+        $result = $integration->validate_payment_mappings_table_field( 'payment_gateways_mapping', $value );
+
+        $this->assertArrayNotHasKey(
+            'cod',
+            $result,
+            'Una fila con payment_type CASH sin payment_method NO debe guardarse (contraste con CREDIT que sí se guarda)'
+        );
+    }
+
+    /**
+     * Test 14 [RED]: gateway activo con payment_type vacío debe fallar independientemente de payment_method
+     */
+    public function test_validate_active_gateway_fails_without_payment_type() {
+        $existing_mapping = [
+            'cod' => [
+                'payment_type'   => 'CASH',
+                'payment_method' => 'CASH',
+                'account_id'     => '',
+            ],
+        ];
+
+        update_option( 'woocommerce_wc_alegra_integration_settings', [
+            'enabled'                  => 'no',
+            'payment_gateways_mapping' => $existing_mapping,
+        ] );
+
+        $integration = $this->create_integration_test_double();
+
+        $value = [
+            'cod' => [
+                'payment_type'   => '',
+                'payment_method' => 'CASH',
+                'account_id'     => '',
+            ],
+        ];
+
+        $result = $integration->validate_payment_mappings_table_field( 'payment_gateways_mapping', $value );
+
+        $this->assertSame(
+            $existing_mapping,
+            $result,
+            'Un gateway activo sin payment_type debe rechazarse siempre'
+        );
+    }
+
+    /**
+     * Test 15: generate_payment_mappings_table_html incluye data-attributes para validación UX en vivo.
+     *
+     * Verifica que la tabla generada contenga los identificadores que el JS
+     * admin-payment-mappings.js necesita para validar filas CASH sin Forma de pago.
+     */
+    public function test_payment_mappings_table_html_contains_ux_data_attributes() {
+        $integration = $this->create_integration_test_double();
+
+        $data = [
+            'title'          => 'Mapeo de pagos',
+            'payment_methods' => Integration_Alegra_WC::PAYMENT_METHODS_UI,
+            'bank_accounts'  => [],
+            'active_gateways' => [ 'cod' => 'Contra entrega' ],
+            'all_gateways'   => [ 'cod' => 'Contra entrega' ],
+            'payment_types'  => [
+                Integration_Alegra_WC::PAYMENT_TYPE_CASH   => 'Contado',
+                Integration_Alegra_WC::PAYMENT_TYPE_CREDIT => 'Crédito',
+            ],
+        ];
+
+        $html = $integration->generate_payment_mappings_table_html( 'payment_gateways_mapping', $data );
+
+        $this->assertStringContainsString(
+            'id="alegra-payment-mappings-table"',
+            $html,
+            'La tabla debe tener id="alegra-payment-mappings-table" para que el JS la encuentre'
+        );
+        $this->assertStringContainsString(
+            'data-alegra-gateway-id="cod"',
+            $html,
+            'Cada fila <tr> debe exponer data-alegra-gateway-id con el ID del gateway'
+        );
+        $this->assertStringContainsString(
+            'data-alegra-gateway-label=',
+            $html,
+            'Cada fila <tr> debe exponer data-alegra-gateway-label con el nombre legible'
+        );
+        $this->assertStringContainsString(
+            'data-alegra-active=',
+            $html,
+            'Cada fila <tr> debe exponer data-alegra-active para distinguir activos de inactivos'
+        );
+        $this->assertStringContainsString(
+            'data-alegra-field="payment_type"',
+            $html,
+            'El select de Tipo de pago debe tener data-alegra-field="payment_type"'
+        );
+        $this->assertStringContainsString(
+            'data-alegra-field="payment_method"',
+            $html,
+            'El select de Forma de pago debe tener data-alegra-field="payment_method"'
+        );
+    }
 }

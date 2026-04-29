@@ -99,7 +99,7 @@ return [
         'bank_accounts' => $bank_accounts,
         'active_gateways' => $active_gateways,
         'all_gateways' => $all_gateways,
-        'description' => __( 'Debe configurar método de pago, cuenta bancaria y tipo de pago para cada gateway activo. Los gateways inactivos con mapeo guardado también se muestran para edición.' ),
+        'description' => __( 'Configure el tipo de pago para cada gateway. Cuando el tipo es <strong>Contado (CASH)</strong>, la Forma de pago es obligatoria. Cuando es <strong>Crédito (CREDIT)</strong>, la Forma de pago es opcional. La Cuenta bancaria siempre es opcional. Los gateways inactivos con mapeo guardado también se muestran para edición.' ),
         'desc_tip' => false
     ),
     'client'  => array(

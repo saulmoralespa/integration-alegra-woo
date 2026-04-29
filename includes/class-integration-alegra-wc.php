@@ -386,8 +386,6 @@ class Integration_Alegra_WC
                     "id" => $client_id
                 ],
                 "items" => $items_invoice,
-                "paymentMethod" => "CASH",
-                "paymentForm" =>  "CASH", //or CREDIT
                 "type" => "NATIONAL", //EXPORT
                 "purchaseOrderNumber" => (string)$order_id,
                 /*"healthSector" => [
@@ -417,8 +415,14 @@ class Integration_Alegra_WC
 
             if ( $payment_mapping ) {
                 $data_invoice['paymentForm']   = $payment_mapping['payment_type']   ?? self::PAYMENT_TYPE_CASH;
-                $data_invoice['paymentMethod'] = $payment_mapping['payment_method'] ?? self::PAYMENT_TYPE_CASH;
-                $data_invoice['payments']      = self::build_invoice_payments_data( $order, $payment_mapping );
+                // paymentMethod top-level is only set when payment_method is non-empty (e.g. CREDIT without Forma de pago omits it).
+                if ( ! empty( $payment_mapping['payment_method'] ) ) {
+                    $data_invoice['paymentMethod'] = $payment_mapping['payment_method'];
+                }
+                $payments_data = self::build_invoice_payments_data( $order, $payment_mapping );
+                if ( self::payments_has_children( $payments_data ) ) {
+                    $data_invoice['payments'] = $payments_data;
+                }
             } else {
                 integration_alegra_wc_smp()->log(
                     sprintf(
@@ -600,12 +604,7 @@ class Integration_Alegra_WC
             $payment_method       = sanitize_text_field( (string) ( $mapping['payment_method'] ?? '' ) );
             $account_id           = sanitize_text_field( (string) ( $mapping['account_id'] ?? '' ) );
 
-            if ( ! $sanitized_gateway_id || ! $payment_method || ! $account_id ) {
-                continue;
-            }
-
-            // Reject any payment_method not present in the UBL catalog.
-            if ( ! isset( self::PAYMENTS_METHODS[ $payment_method ] ) ) {
+            if ( ! $sanitized_gateway_id ) {
                 continue;
             }
 
@@ -613,6 +612,16 @@ class Integration_Alegra_WC
             $payment_type = in_array( $raw_payment_type, $valid_payment_types, true )
                 ? $raw_payment_type
                 : self::get_payment_type_from_method( $payment_method );
+
+            // payment_method is required only for CASH; discard CASH rows without it.
+            if ( $payment_type === self::PAYMENT_TYPE_CASH && ! $payment_method ) {
+                continue;
+            }
+
+            // Reject non-empty payment_method not present in the UBL catalog.
+            if ( $payment_method && ! isset( self::PAYMENTS_METHODS[ $payment_method ] ) ) {
+                continue;
+            }
 
             $normalized_mapping[ $sanitized_gateway_id ] = [
                 'payment_method' => $payment_method,
@@ -648,6 +657,17 @@ class Integration_Alegra_WC
         return null;
     }
 
+    private static function payments_has_children( array $payments_data ): bool
+    {
+        if ( empty( $payments_data ) ) {
+            return false;
+        }
+
+        $first = $payments_data[0];
+
+        return ! empty( $first['paymentMethod'] ) || ! empty( $first['account'] );
+    }
+
     private static function build_invoice_payments_data( WC_Order $order, array $payment_mapping ): array
     {
         $order_created_at = $order->get_date_created();
@@ -655,19 +675,25 @@ class Integration_Alegra_WC
             ? wc_format_datetime( $order_created_at, 'Y-m-d' )
             : wp_date( 'Y-m-d' );
 
-        return [
-            [
-                'date' => $payment_date,
-                'amount' => (float) $order->get_total(),
-                'paymentMethod' => self::get_legacy_child_payment_method( $payment_mapping['payment_method'] ),
-                'account' => [
-                    'id' => $payment_mapping['account_id'],
-                ],
-                'currency' => [
-                    'code' => $order->get_currency(),
-                ],
+        $entry = [
+            'date'     => $payment_date,
+            'amount'   => (float) $order->get_total(),
+            'currency' => [
+                'code' => $order->get_currency(),
             ],
         ];
+
+        if ( ! empty( $payment_mapping['payment_method'] ) ) {
+            $entry['paymentMethod'] = self::get_legacy_child_payment_method( $payment_mapping['payment_method'] );
+        }
+
+        if ( ! empty( $payment_mapping['account_id'] ) ) {
+            $entry['account'] = [
+                'id' => $payment_mapping['account_id'],
+            ];
+        }
+
+        return [ $entry ];
     }
 
     /**

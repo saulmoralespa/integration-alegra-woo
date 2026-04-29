@@ -385,6 +385,30 @@ class Integration_Alegra_WC_Plugin
             wp_enqueue_script( 'integration-alegra', $this->assets. 'js/integration-alegra.js', array( 'jquery' ), $this->version, true );
             wp_enqueue_script( 'integration-alegra-sweet-alert', $this->assets. 'js/sweetalert2.min.js', array( 'jquery' ), $this->version, true );
         }
+
+        // Validación UX en vivo para la tabla de mapeo de métodos de pago.
+        $is_payment_mapping_screen = (
+            $hook === 'woocommerce_page_wc-settings'
+            && isset( $_GET['tab'] )     && 'integration' === $_GET['tab']
+            && isset( $_GET['section'] ) && 'wc_alegra_integration' === $_GET['section']
+        );
+
+        if ( $is_payment_mapping_screen ) {
+            wp_enqueue_script(
+                'integration-alegra-payment-mappings',
+                $this->assets . 'js/admin-payment-mappings.js',
+                array( 'jquery' ),
+                $this->version,
+                true
+            );
+            wp_localize_script(
+                'integration-alegra-payment-mappings',
+                'alegraPaymentMappings',
+                array(
+                    'cashType' => Integration_Alegra_WC::PAYMENT_TYPE_CASH,
+                )
+            );
+        }
     }
 
     public function enqueue_scripts(): void
