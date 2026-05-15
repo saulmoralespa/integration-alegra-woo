@@ -5,7 +5,7 @@ Tags: commerce, e-commerce, commerce, WordPress ecommerce, store, sales, sell, s
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.1.2
+Stable tag: 0.1.3
 WC requires at least: 9.6
 WC tested up to: 10.7
 License: GNU General Public License v3.0
@@ -215,6 +215,9 @@ Sí, el plugin incluye una opción de sincronización masiva de productos desde 
 5.  screenshot-5.png
 
 == Changelog ==
+
+= 0.1.3 =
+* Fixed require account selection for payment methods
 
 = 0.1.2 =
 * Fixed payment method (Forma de pago) is now required only when payment type is CASH; CREDIT gateways can be saved without it

@@ -337,6 +337,18 @@ class WC_Alegra_Integration extends WC_Integration
                 }
             }
 
+            // Account is required when payment_method is selected (both CASH and CREDIT).
+            if ($payment_method && !$account_id) {
+                WC_Admin_Settings::add_error(
+                    sprintf(
+                        __('Integration Alegra Woocommerce: La Cuenta bancaria es obligatoria cuando la Forma de pago está seleccionada en el gateway "%s".', 'integration-alegra-woo'),
+                        $gateway_id
+                    )
+                );
+                $has_errors = true;
+                continue;
+            }
+
             if ( $account_id && !isset($available_bank_accounts[$account_id])) {
                 WC_Admin_Settings::add_error(
                     sprintf(
